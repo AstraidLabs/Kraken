@@ -57,47 +57,59 @@ public partial class MainWindow : Window
         try
         {
             using var searcher = new ManagementObjectSearcher(query);
-            foreach (var obj in searcher.Get())
+            SppApi.SLOpen(out var hSLC);
+            using (hSLC)
             {
-                var name = obj["Name"]?.ToString() ?? string.Empty;
-                var description = obj["Description"]?.ToString() ?? string.Empty;
-                var activationId = obj["ID"]?.ToString() ?? string.Empty;
-                var partialKey = obj["PartialProductKey"]?.ToString() ?? string.Empty;
-                var statusCode = obj["LicenseStatus"] != null ? Convert.ToInt32(obj["LicenseStatus"]) : 0;
-                var status = statusCode switch
+                foreach (var obj in searcher.Get())
                 {
-                    0 => "Unlicensed",
-                    1 => "Licensed",
-                    2 => "Grace",
-                    3 => "Notification",
-                    4 => "Expired",
-                    5 => "Extended Grace",
-                    _ => "Unknown"
-                };
-                var grace = obj["GracePeriodRemaining"] != null ? Convert.ToInt32(obj["GracePeriodRemaining"]) : 0;
-                DateTime? evalEnd = null;
-                if (obj["EvaluationEndDate"] != null)
-                {
-                    try
+                    var name = obj["Name"]?.ToString() ?? string.Empty;
+                    var description = obj["Description"]?.ToString() ?? string.Empty;
+                    var activationId = obj["ID"]?.ToString() ?? string.Empty;
+                    var partialKey = obj["PartialProductKey"]?.ToString() ?? string.Empty;
+                    var statusCode = obj["LicenseStatus"] != null ? Convert.ToInt32(obj["LicenseStatus"]) : 0;
+                    var status = statusCode switch
                     {
-                        evalEnd = ManagementDateTimeConverter.ToDateTime(obj["EvaluationEndDate"].ToString());
-                    }
-                    catch
+                        0 => "Unlicensed",
+                        1 => "Licensed",
+                        2 => "Grace",
+                        3 => "Notification",
+                        4 => "Expired",
+                        5 => "Extended Grace",
+                        _ => "Unknown"
+                    };
+                    var grace = obj["GracePeriodRemaining"] != null ? Convert.ToInt32(obj["GracePeriodRemaining"]) : 0;
+                    DateTime? evalEnd = null;
+                    if (obj["EvaluationEndDate"] != null)
                     {
-                        evalEnd = null;
+                        try
+                        {
+                            evalEnd = ManagementDateTimeConverter.ToDateTime(obj["EvaluationEndDate"].ToString());
+                        }
+                        catch
+                        {
+                            evalEnd = null;
+                        }
                     }
+
+                    string installationId = string.Empty;
+                    if (!hSLC.IsInvalid && Guid.TryParse(activationId, out var sku))
+                    {
+                        installationId = SppApi.GenerateOfflineInstallationId(hSLC, sku) ?? string.Empty;
+                    }
+
+                    Licenses.Add(new LicenseInfo
+                    {
+                        Application = application,
+                        Name = name,
+                        Description = description,
+                        ActivationId = activationId,
+                        PartialProductKey = partialKey,
+                        Status = status,
+                        GraceMinutes = grace,
+                        EvaluationEndDate = evalEnd,
+                        InstallationId = installationId
+                    });
                 }
-                Licenses.Add(new LicenseInfo
-                {
-                    Application = application,
-                    Name = name,
-                    Description = description,
-                    ActivationId = activationId,
-                    PartialProductKey = partialKey,
-                    Status = status,
-                    GraceMinutes = grace,
-                    EvaluationEndDate = evalEnd
-                });
             }
         }
         catch (ManagementException)

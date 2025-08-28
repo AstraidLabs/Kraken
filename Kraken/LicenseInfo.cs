@@ -12,4 +12,5 @@ public class LicenseInfo
     public string Status { get; set; } = string.Empty;
     public int GraceMinutes { get; set; }
     public DateTime? EvaluationEndDate { get; set; }
+    public string InstallationId { get; set; } = string.Empty;
 }
