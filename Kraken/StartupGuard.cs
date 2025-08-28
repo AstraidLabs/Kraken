@@ -13,13 +13,12 @@ namespace Kraken
 {
     /// <summary>
     /// Blokuje spuštění aplikace v nevhodných stavech systému:
-    /// - Během dokončování instalace Windows / OOBE / WinPE
-    /// - V nouzovém režimu (Safe Mode)
-    /// - Během instalace/servisování Windows Update (CBS/TiWorker)
-    /// - Během probíhající MSI instalace/odinstalace
-    /// - Během instalace/aktualizace Office (Click-to-Run)
-    /// 
-    /// Vše je "read-only" (bez zásahů do služeb/registrů).
+    /// - Instalace Windows / OOBE / WinPE
+    /// - Safe Mode
+    /// - Servicing Windows Update (CBS/TiWorker)
+    /// - Probíhající MSI instalace
+    /// - Instalace/aktualizace Office (C2R/MSI)
+    /// Vše read-only (bez zásahů do služeb/registrů).
     /// </summary>
     public static class StartupGuard
     {
@@ -40,20 +39,14 @@ namespace Kraken
             if (IsMsiInProgress())
                 Block("Unavailable while an installer is in progress. Please try again later.", 13);
 
-            if (IsOfficeClickToRunInProgress())
+            if (IsOfficeInstallOrUpdateInProgress())
                 Block("Unavailable while Office is updating. Please try again later.", 14);
         }
 
         private static void Block(string message, int exitCode)
         {
-            try
-            {
-                MessageBox.Show(message, AppTitle, MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch
-            {
-                // V některých režimech (např. WinPE/Setup) nemusí být GUI dostupné – ignoruj.
-            }
+            try { MessageBox.Show(message, AppTitle, MessageBoxButton.OK, MessageBoxImage.Information); }
+            catch { /* UI nemusí být k dispozici (WinPE/Setup) */ }
             Environment.Exit(exitCode);
         }
 
@@ -92,7 +85,6 @@ namespace Kraken
             }
             catch { }
 
-            // Další signály Safe Mode
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SAFEBOOT_OPTION")))
                 return true;
 
@@ -107,12 +99,12 @@ namespace Kraken
         }
 
         // --------------------------
-        // C) Windows Update / CBS (robustní, s předběžnou kontrolou a krátkým CPU samplingem)
+        // C) Windows Update / CBS (předběžná kontrola + krátký CPU sampling)
         // --------------------------
         private static bool IsWindowsUpdateInProgress()
         {
-            const double cpuThresholdPercent = 2.5;                  // agregát přes všechna jádra
-            TimeSpan sampleWindow = TimeSpan.FromMilliseconds(800);  // rychlé, ale dostačující okno
+            const double cpuThresholdPercent = 2.5;
+            TimeSpan sampleWindow = TimeSpan.FromMilliseconds(800);
 
             bool tiServiceRunning = IsServiceRunning("TrustedInstaller"); // silný signál
             bool usoSvcActive = IsServiceActive("UsoSvc");            // Running | StartPending
@@ -121,17 +113,17 @@ namespace Kraken
             string[] wuProcNames = { "TiWorker", "TrustedInstaller", "MoUsoCoreWorker" };
             bool anyWuProcPresent = wuProcNames.Any(n => Process.GetProcessesByName(n).Length > 0);
 
-            // Předběžný rychlý návrat: pokud neběží TI, nejsou přítomny WU procesy
-            // a není aktivní orchestrátor s MoUsoCoreWorker, nedělej drahý sampling.
-            bool orchestratorActive = (usoSvcActive || wuauservActive) && Process.GetProcessesByName("MoUsoCoreWorker").Length > 0;
+            // Pokud neběží TI, nejsou WU procesy a orchestrátor není aktivní, nečekáme.
+            bool orchestratorActive = (usoSvcActive || wuauservActive) &&
+                                      Process.GetProcessesByName("MoUsoCoreWorker").Length > 0;
             if (!tiServiceRunning && !anyWuProcPresent && !orchestratorActive)
                 return false;
 
-            // CPU aktivita – měříme až teď
+            // CPU aktivita – až nyní
             double wuCpuPercent = GetAggregateCpuPercent(wuProcNames, sampleWindow);
             bool wuCpuActive = wuCpuPercent >= cpuThresholdPercent;
 
-            // COM IsBusy ber v potaz jen pokud je aspoň nějaká systémová aktivita
+            // COM IsBusy bereme v potaz jen pokud jsou služby/procesy naznačeny
             bool wuServiceSignal = tiServiceRunning || usoSvcActive || wuauservActive || anyWuProcPresent;
             bool wuComBusy = wuServiceSignal && TryIsWuInstallerBusy();
 
@@ -141,7 +133,7 @@ namespace Kraken
             if (wuCpuActive) score++;
             if (wuComBusy) score++;
 
-            // Potřebujeme alespoň 2 nezávislé hlasy a zároveň "silný" (TI) NEBO CPU aktivitu
+            // Alespoň 2 hlasy a zároveň TI nebo měřitelná CPU aktivita
             return (score >= 2) && (tiServiceRunning || wuCpuActive);
         }
 
@@ -162,33 +154,53 @@ namespace Kraken
         }
 
         // --------------------------
-        // E) Office Click-to-Run aktivní
+        // E) Office instalace/aktualizace (C2R + MSI) – robustní
         // --------------------------
-        private static bool IsOfficeClickToRunInProgress()
+        private static bool IsOfficeInstallOrUpdateInProgress()
         {
-            bool c2rActive = IsServiceActive("ClickToRunSvc");
-            if (!c2rActive) return false;
+            // Primární signály
+            bool c2rSvcActive = IsServiceActive("ClickToRunSvc"); // Running | StartPending
+            bool procPresent = AnyProcessRunning("OfficeClickToRun", "OfficeC2RClient");
 
-            if (Process.GetProcessesByName("OfficeClickToRun").Length > 0 ||
-                Process.GetProcessesByName("OfficeC2RClient").Length > 0)
-                return true;
+            // Nic nenasvědčuje aktivitě? rychle skonči
+            if (!c2rSvcActive && !procPresent && !IsAnyOfficeUpdateTaskRunning())
+                return false;
 
-            // Volitelný doplňkový signál (heuristika):
-            // UpdateState != "Idle" = pravděpodobně aktivní update/stream
-            try
-            {
-                string state = ReadStringHKLM(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration", "UpdateState");
-                if (!string.IsNullOrWhiteSpace(state) &&
-                    !state.Equals("Idle", StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            catch { }
+            // Lehký CPU sample (jen když je důvod)
+            double cpuPct = GetAggregateCpuPercent(new[] { "OfficeClickToRun", "OfficeC2RClient" }, TimeSpan.FromMilliseconds(700));
+            bool cpuActive = cpuPct >= 2.0;
 
-            return false;
+            // Registry heuristiky (C2R)
+            string updateState = ReadStringHKLM(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration", "UpdateState");
+            int streamingFinished = ReadDwordHKLM(@"SOFTWARE\Microsoft\Office\ClickToRun\Configuration", "StreamingFinished");
+            bool regBusy = !string.IsNullOrWhiteSpace(updateState) &&
+                           !updateState.Equals("Idle", StringComparison.OrdinalIgnoreCase);
+
+            // Streaming (instalace/aktualizace probíhá)
+            bool streaming = procPresent && streamingFinished == 0;
+
+            // Plánovač úloh – Office Automatic Updates
+            bool taskRunning = IsAnyOfficeUpdateTaskRunning();
+
+            // MSI fallback (Office MSI)
+            bool msiBusy = IsServiceActive("msiserver") && AnyProcessRunning("msiexec");
+
+            // Scoring
+            int score = 0;
+            if (c2rSvcActive) score++;
+            if (procPresent) score++;
+            if (cpuActive) score++;
+            if (regBusy) score++;
+            if (streaming) score++;
+            if (taskRunning) score++;
+            if (msiBusy) score++;
+
+            bool doingWork = cpuActive || regBusy || streaming || msiBusy;
+            return (score >= 2) && doingWork;
         }
 
         // --------------------------
-        // Helpers: služby, CPU sampling, WU COM IsBusy, registry
+        // Helpers: služby, procesy, CPU sampling, COM, registry
         // --------------------------
         private static bool IsServiceRunning(string name)
         {
@@ -209,6 +221,22 @@ namespace Kraken
                        sc.Status == ServiceControllerStatus.StartPending;
             }
             catch { return false; }
+        }
+
+        private static bool AnyProcessRunning(params string[] names)
+        {
+            var set = new HashSet<string>(names.Select(n => n.ToLowerInvariant()));
+            try
+            {
+                foreach (var p in Process.GetProcesses())
+                {
+                    try { if (set.Contains(p.ProcessName.ToLowerInvariant())) return true; }
+                    catch { /* přístup odepřen / proces skončil */ }
+                    finally { try { p.Dispose(); } catch { } }
+                }
+            }
+            catch { }
+            return false;
         }
 
         private static double GetAggregateCpuPercent(IEnumerable<string> procNames, TimeSpan window)
@@ -233,19 +261,9 @@ namespace Kraken
                 TimeSpan sum = TimeSpan.Zero;
                 foreach (var p in Process.GetProcesses())
                 {
-                    try
-                    {
-                        if (names.Contains(p.ProcessName))
-                            sum += p.TotalProcessorTime;
-                    }
-                    catch
-                    {
-                        // Access denied / rychle končící procesy – ignoruj
-                    }
-                    finally
-                    {
-                        try { p.Dispose(); } catch { }
-                    }
+                    try { if (names.Contains(p.ProcessName)) sum += p.TotalProcessorTime; }
+                    catch { }
+                    finally { try { p.Dispose(); } catch { } }
                 }
                 return sum;
             }
@@ -253,7 +271,7 @@ namespace Kraken
 
         private static bool TryIsWuInstallerBusy()
         {
-            // Reflexe COMu "Microsoft.Update.Session" → CreateUpdateInstaller().IsBusy
+            // COM: Microsoft.Update.Session → CreateUpdateInstaller().IsBusy
             try
             {
                 var t = Type.GetTypeFromProgID("Microsoft.Update.Session", throwOnError: false);
@@ -263,30 +281,66 @@ namespace Kraken
                 if (session == null) return false;
 
                 object? installer = session.GetType().GetMethod("CreateUpdateInstaller")?.Invoke(session, null);
-                if (installer == null)
-                {
-                    ReleaseCom(session);
-                    return false;
-                }
+                if (installer == null) { ReleaseCom(session); return false; }
 
-                bool busy = false;
-                var prop = installer.GetType().GetProperty("IsBusy");
-                if (prop != null)
-                    busy = prop.GetValue(installer) is bool b && b;
+                bool busy = installer.GetType().GetProperty("IsBusy")?.GetValue(installer) is bool b && b;
 
                 ReleaseCom(installer);
                 ReleaseCom(session);
                 return busy;
             }
+            catch { return false; }
+        }
+
+        // Task Scheduler COM – detekce běžících Office update úloh
+        private static bool IsAnyOfficeUpdateTaskRunning()
+        {
+            try
+            {
+                var t = Type.GetTypeFromProgID("Schedule.Service", throwOnError: false);
+                if (t == null) return false;
+
+                dynamic svc = Activator.CreateInstance(t)!;
+                svc.Connect();
+
+                bool running = false;
+                // Standardní složka plánovače
+                dynamic folder = svc.GetFolder(@"\Microsoft\Office");
+                dynamic tasks = folder.GetTasks(0);
+
+                string[] nameHints = {
+                    "Office Automatic Updates", // i "Office Automatic Updates 2.0"
+                    "ClickToRun"
+                };
+
+                for (int i = 1; i <= (int)tasks.Count; i++)
+                {
+                    dynamic task = tasks[i];
+                    string name = task.Name as string ?? string.Empty;
+                    int state = (int)task.State; // TASK_STATE_RUNNING == 4
+                    if (state == 4 && nameHints.Any(h => name.IndexOf(h, StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        running = true;
+                    }
+                    ReleaseCom(task);
+                    if (running) break;
+                }
+
+                ReleaseCom(tasks);
+                ReleaseCom(folder);
+                ReleaseCom(svc);
+                return running;
+            }
             catch
             {
+                // Task Scheduler nemusí být dostupný; heuristiky níže stačí
                 return false;
             }
+        }
 
-            static void ReleaseCom(object o)
-            {
-                try { Marshal.FinalReleaseComObject(o); } catch { }
-            }
+        private static void ReleaseCom(object o)
+        {
+            try { Marshal.FinalReleaseComObject(o); } catch { }
         }
 
         private static RegistryKey? OpenHKLM(string subKey)
@@ -304,10 +358,24 @@ namespace Kraken
                 return RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32)
                                   .OpenSubKey(subKey, writable: false);
             }
-            catch
+            catch { return null; }
+        }
+
+        private static string ReadStringHKLM(string subKey, string valueName)
+        {
+            try { using var k = OpenHKLM(subKey); return k?.GetValue(valueName)?.ToString() ?? string.Empty; }
+            catch { return string.Empty; }
+        }
+
+        private static int ReadDwordHKLM(string subKey, string valueName)
+        {
+            try
             {
-                return null;
+                using var k = OpenHKLM(subKey);
+                var v = k?.GetValue(valueName);
+                return v is int i ? i : (v is string s && int.TryParse(s, out var j) ? j : 0);
             }
+            catch { return 0; }
         }
 
         private static int ToInt(object? value)
@@ -322,16 +390,6 @@ namespace Kraken
                 };
             }
             catch { return 0; }
-        }
-
-        private static string ReadStringHKLM(string subKey, string valueName)
-        {
-            try
-            {
-                using var k = OpenHKLM(subKey);
-                return k?.GetValue(valueName)?.ToString() ?? string.Empty;
-            }
-            catch { return string.Empty; }
         }
 
         [DllImport("user32.dll")]
