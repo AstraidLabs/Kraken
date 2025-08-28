@@ -1,188 +1,749 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 
 namespace Kraken
 {
     /// <summary>
-    /// P/Invoke wrapper around slc.dll / sppc.dll (Software Protection Platform APIs).
-    /// All signatures are taken from the PowerShell script’s DefinePInvokeMethod calls.
+    /// Provides a managed wrapper for Software Protection Platform (SPP) APIs.
     /// </summary>
     public static class SppApi
     {
-        /* ------------------------------------------------------------------ */
-        /* 1) Basic SL (Software Licensing) handles                           */
-        /* ------------------------------------------------------------------ */
+        private const int ERROR_MOD_NOT_FOUND = unchecked((int)0x8007007E);
+        private const int ERROR_PROC_NOT_FOUND = unchecked((int)0x8007007F);
 
-        // SLOpen / SLClose – open/close the licensing context.
-        // The script uses "sppc.dll" (or "slc.dll") for these.
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLOpen(ref IntPtr hSLC);
+        /// <summary>
+        /// Represents a safe handle for an SPP session.
+        /// </summary>
+        public sealed class SppSafeHandle : SafeHandle
+        {
+            /// <summary>
+            /// Initializes a new instance of the <see cref="SppSafeHandle"/> class.
+            /// </summary>
+            public SppSafeHandle() : base(IntPtr.Zero, true)
+            {
+            }
 
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLClose(IntPtr hSLC);
+            /// <inheritdoc />
+            public override bool IsInvalid => handle == IntPtr.Zero;
 
-        /* ------------------------------------------------------------------ */
-        /* 2) License / SKU related functions                                 */
-        /* ------------------------------------------------------------------ */
+            /// <summary>
+            /// Initializes the handle with a native value.
+            /// </summary>
+            /// <param name="h">Native SPP handle.</param>
+            internal void Initialize(IntPtr h)
+            {
+                SetHandle(h);
+            }
 
-        // SLGenerateOfflineInstallationId – generates an offline ID string.
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGenerateOfflineInstallationId(
-            IntPtr hSLC,
-            ref Guid skuId,
-            out IntPtr pBstrOfflineId);   // returned string pointer
+            /// <inheritdoc />
+            protected override bool ReleaseHandle()
+            {
+                int hr;
+                try
+                {
+                    hr = NativeSppc.SLClose(handle);
+                }
+                catch (DllNotFoundException)
+                {
+                    try
+                    {
+                        hr = NativeSlc.SLClose(handle);
+                    }
+                    catch (DllNotFoundException)
+                    {
+                        return false;
+                    }
+                    catch (EntryPointNotFoundException)
+                    {
+                        return false;
+                    }
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    try
+                    {
+                        hr = NativeSlc.SLClose(handle);
+                    }
+                    catch (DllNotFoundException)
+                    {
+                        return false;
+                    }
+                    catch (EntryPointNotFoundException)
+                    {
+                        return false;
+                    }
+                }
 
-        // SLGetSLIDList – list all SLIDs (subscription IDs) for an app.
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetSLIDList(
-            IntPtr hSLC,
-            uint dwFlags,
-            ref Guid appId,
-            uint dwCount,                // usually 1
-            out uint pcSLIDs,
-            out IntPtr ppSLIDs);         // array of 16‑byte GUIDs
+                return hr == 0;
+            }
+        }
 
-        // SLGetLicensingStatusInformation – get licensing state of an SKU.
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetLicensingStatusInformation(
-            IntPtr hSLC,
-            ref Guid appId,
-            ref Guid skuId,
-            IntPtr pwszProductVersion,   // null in the script
-            out uint pcStatus,
-            out IntPtr ppStatus);        // array of status structs
+        /// <summary>
+        /// Opens an SPP session.
+        /// </summary>
+        /// <param name="hSLC">Receives the session handle on success.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLOpen(out SppSafeHandle hSLC)
+        {
+            hSLC = new SppSafeHandle();
+            IntPtr tmp = IntPtr.Zero;
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLOpen(ref tmp);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLOpen(ref tmp);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLOpen(ref tmp);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
 
-        // SLGetPKeyInformation – query a public key attribute.
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetPKeyInformation(
-            IntPtr hSLC,
-            ref Guid skuId,
-            string pszKey,
-            out uint ptData,
-            out uint pcData,
-            out IntPtr ppData);          // returned data pointer
+            if (hr == 0 && tmp != IntPtr.Zero)
+            {
+                hSLC.Initialize(tmp);
+            }
+            return hr;
+        }
 
-        // SLGetProductSkuInformation – query a SKU attribute.
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetProductSkuInformation(
-            IntPtr hSLC,
-            ref Guid skuId,
-            string pszKey,
-            out uint ptData,
-            out uint pcData,
-            out IntPtr ppData);          // returned data pointer
+        /// <summary>
+        /// Retrieves a list of SLIC identifiers.
+        /// </summary>
+        /// <param name="h">Session handle.</param>
+        /// <param name="appId">Application identifier.</param>
+        /// <param name="ppGuids">Receives the GUID array pointer.</param>
+        /// <param name="count">Receives the number of GUIDs.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetSLIDList(SppSafeHandle h, Guid appId, out IntPtr ppGuids, out uint count)
+        {
+            ppGuids = IntPtr.Zero;
+            count = 0;
+            EnsureHandle(h);
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out count, out ppGuids);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out count, out ppGuids);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out count, out ppGuids);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            return hr;
+        }
 
-        // SLGetServiceInformation – query a service attribute.
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetServiceInformation(
-            IntPtr hSLC,
-            string pszService,
-            out uint ptData,
-            out uint pcData,
-            out IntPtr ppData);          // returned data pointer
+        /// <summary>
+        /// Retrieves licensing status information.
+        /// </summary>
+        /// <param name="h">Session handle.</param>
+        /// <param name="appId">Application identifier.</param>
+        /// <param name="skuId">SKU identifier.</param>
+        /// <param name="ppStatus">Receives the status information pointer.</param>
+        /// <param name="cStatus">Receives the number of status entries.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetLicensingStatusInformation(SppSafeHandle h, Guid appId, Guid skuId, out IntPtr ppStatus, out uint cStatus)
+        {
+            ppStatus = IntPtr.Zero;
+            cStatus = 0;
+            EnsureHandle(h);
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out cStatus, out ppStatus);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out cStatus, out ppStatus);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out cStatus, out ppStatus);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            return hr;
+        }
 
-        // SLGetApplicationInformation – query an app attribute (Office only).
-        [DllImport("sppc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetApplicationInformation(
-            IntPtr hSLC,
-            ref Guid appId,
-            string pszApp,
-            out uint ptData,
-            out uint pcData,
-            out IntPtr ppData);          // returned data pointer
+        /// <summary>
+        /// Retrieves public key information.
+        /// </summary>
+        /// <param name="h">Session handle.</param>
+        /// <param name="pkeyId">Public key identifier.</param>
+        /// <param name="name">Value name.</param>
+        /// <param name="tData">Receives the data type.</param>
+        /// <param name="cData">Receives the data size.</param>
+        /// <param name="bData">Receives the data pointer.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetPKeyInformation(SppSafeHandle h, Guid pkeyId, string name, out uint tData, out uint cData, out IntPtr bData)
+        {
+            tData = 0;
+            cData = 0;
+            bData = IntPtr.Zero;
+            EnsureHandle(h);
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out tData, out cData, out bData);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            return hr;
+        }
 
-        /* ------------------------------------------------------------------ */
-        /* 3) Windows‑specific helpers (slc.dll)                              */
-        /* ------------------------------------------------------------------ */
+        /// <summary>
+        /// Retrieves product SKU information.
+        /// </summary>
+        /// <param name="h">Session handle.</param>
+        /// <param name="skuId">SKU identifier.</param>
+        /// <param name="name">Value name.</param>
+        /// <param name="tData">Receives the data type.</param>
+        /// <param name="cData">Receives the data size.</param>
+        /// <param name="bData">Receives the data pointer.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetProductSkuInformation(SppSafeHandle h, Guid skuId, string name, out uint tData, out uint cData, out IntPtr bData)
+        {
+            tData = 0;
+            cData = 0;
+            bData = IntPtr.Zero;
+            EnsureHandle(h);
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out tData, out cData, out bData);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            return hr;
+        }
 
-        // SLGetWindowsInformation – generic key/value query (string).
-        [DllImport("slc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetWindowsInformation(
-            string pszKey,
-            ref uint pcchVal,            // input: buffer size, output: size needed
-            out uint pdwVal,             // used for DWORD‑style values
-            out IntPtr ppwszVal);        // returned Unicode string pointer
+        /// <summary>
+        /// Retrieves service information.
+        /// </summary>
+        /// <param name="h">Session handle.</param>
+        /// <param name="name">Value name.</param>
+        /// <param name="tData">Receives the data type.</param>
+        /// <param name="cData">Receives the data size.</param>
+        /// <param name="bData">Receives the data pointer.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetServiceInformation(SppSafeHandle h, string name, out uint tData, out uint cData, out IntPtr bData)
+        {
+            tData = 0;
+            cData = 0;
+            bData = IntPtr.Zero;
+            EnsureHandle(h);
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLGetServiceInformation(h.DangerousGetHandle(), name, out tData, out cData, out bData);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetServiceInformation(h.DangerousGetHandle(), name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetServiceInformation(h.DangerousGetHandle(), name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            return hr;
+        }
 
-        // SLGetWindowsInformationDWORD – shortcut for DWORD values.
-        [DllImport("slc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLGetWindowsInformationDWORD(
-            string pszKey,
-            out uint pdwVal);
+        /// <summary>
+        /// Retrieves application information.
+        /// </summary>
+        /// <param name="h">Session handle.</param>
+        /// <param name="appId">Application identifier.</param>
+        /// <param name="name">Value name.</param>
+        /// <param name="tData">Receives the data type.</param>
+        /// <param name="cData">Receives the data size.</param>
+        /// <param name="bData">Receives the data pointer.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetApplicationInformation(SppSafeHandle h, Guid appId, string name, out uint tData, out uint cData, out IntPtr bData)
+        {
+            tData = 0;
+            cData = 0;
+            bData = IntPtr.Zero;
+            EnsureHandle(h);
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLGetApplicationInformation(h.DangerousGetHandle(), ref appId, name, out tData, out cData, out bData);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetApplicationInformation(h.DangerousGetHandle(), ref appId, name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGetApplicationInformation(h.DangerousGetHandle(), ref appId, name, out tData, out cData, out bData);
+                }
+                catch (DllNotFoundException)
+                {
+                    return ERROR_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return ERROR_PROC_NOT_FOUND;
+                }
+            }
+            return hr;
+        }
 
-        // SLIsGenuineLocal – query whether a product is genuine (Win‑7 or earlier).
-        [DllImport("slwga.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int SLIsGenuineLocal(
-            ref Guid appId,
-            out uint pdwGenuine,
-            IntPtr pwszVal);
+        /// <summary>
+        /// Retrieves Windows information.
+        /// </summary>
+        /// <param name="valueName">Name of the value.</param>
+        /// <param name="tData">Receives the data type.</param>
+        /// <param name="cData">Receives the data size.</param>
+        /// <param name="bData">Receives the data pointer.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetWindowsInformation(string valueName, out uint tData, out uint cData, out IntPtr bData)
+        {
+            tData = 0;
+            cData = 0;
+            bData = IntPtr.Zero;
+            int hr;
+            try
+            {
+                hr = NativeSlc.SLGetWindowsInformation(valueName, out tData, out cData, out bData);
+            }
+            catch (DllNotFoundException)
+            {
+                return ERROR_MOD_NOT_FOUND;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return ERROR_PROC_NOT_FOUND;
+            }
+            return hr;
+        }
 
-        // SLIsWindowsGenuineLocal – query Windows genuineness (Win‑8+).
-        [DllImport("slc.dll", CharSet = CharSet.Unicode, SetLastError = true,
-                   CallingConvention = CallingConvention.Winapi)]
-        public static extern int SLIsWindowsGenuineLocal(
-            out uint pdwGenuine);
+        /// <summary>
+        /// Retrieves a Windows DWORD value.
+        /// </summary>
+        /// <param name="valueName">Name of the value.</param>
+        /// <param name="dword">Receives the DWORD.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLGetWindowsInformationDWORD(string valueName, out uint dword)
+        {
+            dword = 0;
+            int hr;
+            try
+            {
+                hr = NativeSlc.SLGetWindowsInformationDWORD(valueName, out dword);
+            }
+            catch (DllNotFoundException)
+            {
+                return ERROR_MOD_NOT_FOUND;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return ERROR_PROC_NOT_FOUND;
+            }
+            return hr;
+        }
 
-        /* ------------------------------------------------------------------ */
-        /* 4) Subscription helpers (Clipc.dll)                               */
-        /* ------------------------------------------------------------------ */
+        /// <summary>
+        /// Determines whether Windows is genuine.
+        /// </summary>
+        /// <param name="genuine">Receives the genuineness state.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        public static int SLIsWindowsGenuineLocal(out uint genuine)
+        {
+            genuine = 0;
+            int hr;
+            try
+            {
+                hr = NativeSlc.SLIsWindowsGenuineLocal(out genuine);
+            }
+            catch (DllNotFoundException)
+            {
+                return ERROR_MOD_NOT_FOUND;
+            }
+            catch (EntryPointNotFoundException)
+            {
+                return ERROR_PROC_NOT_FOUND;
+            }
+            return hr;
+        }
 
-        // ClipGetSubscriptionStatus – returns a pointer to SubStatus struct.
-        [DllImport("Clipc.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int ClipGetSubscriptionStatus(
-            ref IntPtr ppSubStatus);
+        /// <summary>
+        /// Returns the offline installation ID string.
+        /// </summary>
+        /// <param name="h">Session handle.</param>
+        /// <param name="skuId">SKU identifier.</param>
+        /// <returns>Installation ID string or null on failure.</returns>
+        public static string? GenerateOfflineInstallationId(SppSafeHandle h, Guid skuId)
+        {
+            EnsureHandle(h);
+            IntPtr pStr = IntPtr.Zero;
+            int hr;
+            try
+            {
+                hr = NativeSppc.SLGenerateOfflineInstallationId(h.DangerousGetHandle(), ref skuId, out pStr);
+            }
+            catch (DllNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGenerateOfflineInstallationId(h.DangerousGetHandle(), ref skuId, out pStr);
+                }
+                catch (DllNotFoundException)
+                {
+                    return null;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return null;
+                }
+            }
+            catch (EntryPointNotFoundException)
+            {
+                try
+                {
+                    hr = NativeSlc.SLGenerateOfflineInstallationId(h.DangerousGetHandle(), ref skuId, out pStr);
+                }
+                catch (DllNotFoundException)
+                {
+                    return null;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    return null;
+                }
+            }
+            if (hr != 0 || pStr == IntPtr.Zero)
+            {
+                return null;
+            }
+            return Marshal.PtrToStringUni(pStr);
+        }
 
-        /* ------------------------------------------------------------------ */
-        /* 5) Helper struct for ClipGetSubscriptionStatus                   */
-        /* ------------------------------------------------------------------ */
+        /// <summary>
+        /// Gets a Windows string value.
+        /// </summary>
+        /// <param name="key">Value name.</param>
+        /// <returns>String value or null on failure.</returns>
+        public static string? GetWindowsString(string key)
+        {
+            uint tData;
+            uint cData;
+            IntPtr bData;
+            int hr = SLGetWindowsInformation(key, out tData, out cData, out bData);
+            if (hr != 0 || tData != 1 || bData == IntPtr.Zero)
+            {
+                return null;
+            }
+            return Marshal.PtrToStringUni(bData);
+        }
 
+        /// <summary>
+        /// Gets a Windows DWORD value.
+        /// </summary>
+        /// <param name="key">Value name.</param>
+        /// <returns>DWORD value or null on failure.</returns>
+        public static uint? GetWindowsDWord(string key)
+        {
+            int hr = SLGetWindowsInformationDWORD(key, out uint dword);
+            if (hr != 0)
+            {
+                return null;
+            }
+            return dword;
+        }
+
+        /// <summary>
+        /// Attempts to obtain subscription status.
+        /// </summary>
+        /// <param name="status">Receives the subscription status.</param>
+        /// <returns><c>true</c> on success; otherwise, <c>false</c>.</returns>
+        public static bool TryGetSubscriptionStatus(out SubStatus status)
+        {
+            status = default;
+            IntPtr buffer = Marshal.AllocHGlobal(Marshal.SizeOf<SubStatus>());
+            try
+            {
+                IntPtr ptr = buffer;
+                int hr = ClipGetSubscriptionStatus(ref ptr);
+                if (hr != 0 || ptr == IntPtr.Zero)
+                {
+                    return false;
+                }
+                status = Marshal.PtrToStructure<SubStatus>(ptr);
+                return true;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+
+        /// <summary>
+        /// Ensures the handle is valid.
+        /// </summary>
+        /// <param name="h">Handle to validate.</param>
+        private static void EnsureHandle(SppSafeHandle h)
+        {
+            if (h == null || h.IsInvalid)
+            {
+                throw new ArgumentException("Invalid SPP handle.", nameof(h));
+            }
+        }
+
+        /// <summary>
+        /// Determines whether a product is genuine (Windows 7 or earlier).
+        /// </summary>
+        /// <param name="appId">Application identifier.</param>
+        /// <param name="pdwGenuine">Receives the genuineness state.</param>
+        /// <param name="pvReserved">Reserved parameter.</param>
+        /// <returns>HRESULT of the native call.</returns>
+        [DllImport("slwga.dll", CharSet = CharSet.Unicode)]
+        public static extern int SLIsGenuineLocal(ref Guid appId, out uint pdwGenuine, IntPtr pvReserved);
+
+        [DllImport("clipc.dll", CharSet = CharSet.Unicode)]
+        private static extern int ClipGetSubscriptionStatus(ref IntPtr pStatus);
+
+        /// <summary>
+        /// Subscription status information.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential)]
         public struct SubStatus
         {
-            public uint dwEnabled;   // 0 = disabled, 1 = enabled
-            public uint dwSku;       // SKU ID
-            public uint dwState;     // subscription state
+            /// <summary>Indicates whether subscription is enabled.</summary>
+            public uint dwEnabled;
+            /// <summary>Subscription SKU.</summary>
+            public uint dwSku;
+            /// <summary>Subscription state.</summary>
+            public uint dwState;
         }
 
-        /* ------------------------------------------------------------------ */
-        /* 6) Optional – P/Invoke for SLGenerateOfflineInstallationId        */
-        /* ------------------------------------------------------------------ */
-
-        // The function is already defined above; we expose a small wrapper.
-        public static string GenerateOfflineInstallationId(IntPtr hSLC, Guid skuId)
+        // Native import classes
+        internal static class NativeSppc
         {
-            if (SLGenerateOfflineInstallationId(hSLC, ref skuId, out IntPtr ptr) != 0 || ptr == IntPtr.Zero)
-                return null;
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLOpen(ref IntPtr hSLC);
 
-            string result = Marshal.PtrToStringUni(ptr);
-            Marshal.FreeHGlobal(ptr);
-            return result;
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLClose(IntPtr hSLC);
+
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGenerateOfflineInstallationId(IntPtr hSLC, ref Guid skuId, out IntPtr pwszOfflineId);
+
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetSLIDList(IntPtr hSLC, uint dwFlags, ref Guid appId, uint dwCount, out uint pcSLIDs, out IntPtr ppSLIDs);
+
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetLicensingStatusInformation(IntPtr hSLC, ref Guid appId, ref Guid skuId, IntPtr pwszProductVersion, out uint pcStatus, out IntPtr ppStatus);
+
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetPKeyInformation(IntPtr hSLC, ref Guid pkeyId, string valueName, out uint tData, out uint cData, out IntPtr bData);
+
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetProductSkuInformation(IntPtr hSLC, ref Guid skuId, string valueName, out uint tData, out uint cData, out IntPtr bData);
+
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetServiceInformation(IntPtr hSLC, string valueName, out uint tData, out uint cData, out IntPtr bData);
+
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetApplicationInformation(IntPtr hSLC, ref Guid appId, string valueName, out uint tData, out uint cData, out IntPtr bData);
         }
 
-        /* ------------------------------------------------------------------ */
-        /* 7) Optional – helper to read a UTF‑16 string from SLGetWindowsInformation */
-        /* ------------------------------------------------------------------ */
-
-        public static string GetWindowsString(string key)
+        internal static class NativeSlc
         {
-            uint size = 0;
-            uint dummy;
-            if (SLGetWindowsInformation(key, ref size, out dummy, out IntPtr ptr) != 0 || ptr == IntPtr.Zero)
-                return null;
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLOpen(ref IntPtr hSLC);
 
-            string result = Marshal.PtrToStringUni(ptr);
-            Marshal.FreeHGlobal(ptr);
-            return result;
-        }
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLClose(IntPtr hSLC);
 
-        /* ------------------------------------------------------------------ */
-        /* 8) Optional – helper to read a DWORD from SLGetWindowsInformationDWORD */
-        /* ------------------------------------------------------------------ */
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGenerateOfflineInstallationId(IntPtr hSLC, ref Guid skuId, out IntPtr pwszOfflineId);
 
-        public static uint? GetWindowsDWord(string key)
-        {
-            if (SLGetWindowsInformationDWORD(key, out uint val) != 0)
-                return null;
-            return val;
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetSLIDList(IntPtr hSLC, uint dwFlags, ref Guid appId, uint dwCount, out uint pcSLIDs, out IntPtr ppSLIDs);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetLicensingStatusInformation(IntPtr hSLC, ref Guid appId, ref Guid skuId, IntPtr pwszProductVersion, out uint pcStatus, out IntPtr ppStatus);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetPKeyInformation(IntPtr hSLC, ref Guid pkeyId, string valueName, out uint tData, out uint cData, out IntPtr bData);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetProductSkuInformation(IntPtr hSLC, ref Guid skuId, string valueName, out uint tData, out uint cData, out IntPtr bData);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetServiceInformation(IntPtr hSLC, string valueName, out uint tData, out uint cData, out IntPtr bData);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Winapi)]
+            internal static extern int SLIsWindowsGenuineLocal(out uint pdwGenuine);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetWindowsInformation(string valueName, out uint tData, out uint cData, out IntPtr bData);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetWindowsInformationDWORD(string valueName, out uint dword);
+
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)]
+            internal static extern int SLGetApplicationInformation(IntPtr hSLC, ref Guid appId, string valueName, out uint tData, out uint cData, out IntPtr bData);
         }
     }
 }
