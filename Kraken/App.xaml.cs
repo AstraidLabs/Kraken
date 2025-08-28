@@ -12,6 +12,10 @@ public partial class App : Application
     /// <inheritdoc />
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Immediately abort startup if Windows is in a state where running
+        // the application could interfere with system maintenance.
+        StartupGuard.CheckAndExitIfBlocked();
+
         // Normalize key environment variables so the process can locate
         // expected Windows system binaries regardless of architecture.
         EnvironmentSetup.Normalize();
