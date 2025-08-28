@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Management;
+using System.Runtime.InteropServices;
 using System.Windows;
 
 namespace Kraken;
@@ -16,7 +17,30 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         LicensesGrid.ItemsSource = Licenses;
+        DisplaySystemInfo();
         LoadLicenses();
+    }
+
+    private void DisplaySystemInfo()
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT Caption, Version, BuildNumber, OSArchitecture FROM Win32_OperatingSystem");
+            foreach (var obj in searcher.Get())
+            {
+                var caption = obj["Caption"]?.ToString()?.Trim() ?? "Windows";
+                var version = obj["Version"]?.ToString() ?? string.Empty;
+                var build = obj["BuildNumber"]?.ToString() ?? string.Empty;
+                var arch = obj["OSArchitecture"]?.ToString() ?? RuntimeInformation.OSArchitecture.ToString();
+                SystemInfoText.Text = $"{caption} Version {version} (Build {build}, {arch})";
+                break;
+            }
+        }
+        catch (ManagementException)
+        {
+            SystemInfoText.Text = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
+        }
     }
 
     private void LoadLicenses()
