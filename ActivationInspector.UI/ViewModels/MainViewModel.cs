@@ -1,8 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using ActivationInspector.Core.Export;
-using ActivationInspector.Core.Licensing;
-using ActivationInspector.Core.Models;
+using ActivationInspector.Application.Interfaces;
+using ActivationInspector.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -10,9 +9,10 @@ namespace ActivationInspector.UI.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
-    private readonly LicensingService _licensingService = new();
+    private readonly ILicensingService _licensingService;
+    private readonly IExportService _exportService;
 
-    public ObservableCollection<WindowsLicenseDto> WindowsLicenses { get; } = new();
+    public ObservableCollection<WindowsLicense> WindowsLicenses { get; } = new();
 
     [ObservableProperty]
     private bool allFlag;
@@ -32,8 +32,10 @@ public partial class MainViewModel : ObservableObject
     public IAsyncRelayCommand RefreshCommand { get; }
     public IAsyncRelayCommand ExportJsonCommand { get; }
 
-    public MainViewModel()
+    public MainViewModel(ILicensingService licensingService, IExportService exportService)
     {
+        _licensingService = licensingService;
+        _exportService = exportService;
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         ExportJsonCommand = new AsyncRelayCommand(ExportJsonAsync);
     }
@@ -53,7 +55,7 @@ public partial class MainViewModel : ObservableObject
 
     private async Task ExportJsonAsync()
     {
-        var json = await ExportService.ExportJsonAsync(WindowsLicenses);
+        var json = await _exportService.ExportJsonAsync(WindowsLicenses);
         LogText += $"Exported JSON length: {json.Length}\n";
     }
 }

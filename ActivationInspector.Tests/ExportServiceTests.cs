@@ -1,5 +1,5 @@
-using ActivationInspector.Core.Export;
-using ActivationInspector.Core.Models;
+using ActivationInspector.Domain;
+using ActivationInspector.Infrastructure.Export;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -13,12 +13,13 @@ public class ExportServiceTests
     [TestMethod]
     public async Task ExportJsonProducesExpectedStructure()
     {
-        var licenses = new List<WindowsLicenseDto>
+        var licenses = new List<WindowsLicense>
         {
             new() { Name = "Windows", LicenseStatus = "Licensed" }
         };
 
-        string json = await ExportService.ExportJsonAsync(licenses);
+        var service = new ExportService();
+        string json = await service.ExportJsonAsync(licenses);
         var doc = JsonDocument.Parse(json);
         Assert.AreEqual("Windows", doc.RootElement[0].GetProperty("Name").GetString());
         Assert.AreEqual("Licensed", doc.RootElement[0].GetProperty("LicenseStatus").GetString());
