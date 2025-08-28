@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace ActivationInspector.Core.Interop;
+namespace ActivationInspector.Infrastructure.Interop;
 
 internal static class ClipcNative
 {

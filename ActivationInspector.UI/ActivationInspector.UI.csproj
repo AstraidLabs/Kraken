@@ -7,7 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\\ActivationInspector.Core\\ActivationInspector.Core.csproj" />
+    <ProjectReference Include="..\\ActivationInspector.Application\\ActivationInspector.Application.csproj" />
+    <ProjectReference Include="..\\ActivationInspector.Infrastructure\\ActivationInspector.Infrastructure.csproj" />
+    <ProjectReference Include="..\\ActivationInspector.Domain\\ActivationInspector.Domain.csproj" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.0" />
   </ItemGroup>
 </Project>

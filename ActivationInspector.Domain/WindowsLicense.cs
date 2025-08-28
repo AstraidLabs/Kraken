@@ -1,13 +1,13 @@
 using System;
 
-namespace ActivationInspector.Core.Models;
+namespace ActivationInspector.Domain;
 
 /// <summary>
 /// Basic DTO representing a Windows license instance.
 /// The structure intentionally mirrors the data extracted from the
 /// Check-Activation-Status script but is simplified for demonstration purposes.
 /// </summary>
-public class WindowsLicenseDto
+public class WindowsLicense
 {
     public string? Name { get; set; }
     public string? Description { get; set; }

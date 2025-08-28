@@ -1,17 +1,18 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
-using ActivationInspector.Core.Models;
+using ActivationInspector.Application.Interfaces;
+using ActivationInspector.Domain;
 
-namespace ActivationInspector.Core.Export;
+namespace ActivationInspector.Infrastructure.Export;
 
 /// <summary>
 /// Handles simple data export scenarios (JSON/TXT/CSV). Only JSON is implemented
 /// for brevity, the other formats can be added later following the same idea.
 /// </summary>
-public static class ExportService
+public class ExportService : IExportService
 {
-    public static Task<string> ExportJsonAsync(IEnumerable<WindowsLicenseDto> windowsLicenses)
+    public Task<string> ExportJsonAsync(IEnumerable<WindowsLicense> windowsLicenses)
     {
         return Task.Run(() =>
         {

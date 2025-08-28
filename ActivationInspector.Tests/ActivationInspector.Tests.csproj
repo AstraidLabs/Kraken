@@ -17,7 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ActivationInspector.Core\ActivationInspector.Core.csproj" />
+    <ProjectReference Include="..\ActivationInspector.Application\ActivationInspector.Application.csproj" />
+    <ProjectReference Include="..\ActivationInspector.Infrastructure\ActivationInspector.Infrastructure.csproj" />
+    <ProjectReference Include="..\ActivationInspector.Domain\ActivationInspector.Domain.csproj" />
   </ItemGroup>
 
 </Project>

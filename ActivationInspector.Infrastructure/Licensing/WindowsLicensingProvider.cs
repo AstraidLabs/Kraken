@@ -1,12 +1,12 @@
-using ActivationInspector.Core.Interop;
-using ActivationInspector.Core.Models;
+using ActivationInspector.Domain;
+using ActivationInspector.Infrastructure.Interop;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ActivationInspector.Core.Licensing;
+namespace ActivationInspector.Infrastructure.Licensing;
 
 /// <summary>
 /// Provides a minimal wrapper around the native Software Licensing API used by Windows.
@@ -15,16 +15,16 @@ namespace ActivationInspector.Core.Licensing;
 /// </summary>
 public class WindowsLicensingProvider
 {
-    public Task<IReadOnlyList<WindowsLicenseDto>> GetLicensesAsync(CancellationToken token)
+    public Task<IReadOnlyList<WindowsLicense>> GetLicensesAsync(CancellationToken token)
     {
         return Task.Run(() =>
         {
-            var list = new List<WindowsLicenseDto>();
+            var list = new List<WindowsLicense>();
             try
             {
                 uint genuine = 0;
                 int hr = SppNative.SLIsWindowsGenuineLocal(ref genuine);
-                var dto = new WindowsLicenseDto
+                var dto = new WindowsLicense
                 {
                     Name = "Windows",
                     LicenseStatus = hr == 0 ? (genuine == 1 ? "Licensed" : "Unlicensed") : $"HRESULT 0x{hr:X8}"
@@ -33,7 +33,7 @@ public class WindowsLicensingProvider
             }
             catch (DllNotFoundException)
             {
-                list.Add(new WindowsLicenseDto
+                list.Add(new WindowsLicense
                 {
                     Name = "Windows",
                     LicenseStatus = "Licensing APIs not available"
@@ -41,13 +41,13 @@ public class WindowsLicensingProvider
             }
             catch (Exception ex)
             {
-                list.Add(new WindowsLicenseDto
+                list.Add(new WindowsLicense
                 {
                     Name = "Windows",
                     LicenseStatus = ex.Message
                 });
             }
-            return (IReadOnlyList<WindowsLicenseDto>)list;
+            return (IReadOnlyList<WindowsLicense>)list;
         }, token);
     }
 }

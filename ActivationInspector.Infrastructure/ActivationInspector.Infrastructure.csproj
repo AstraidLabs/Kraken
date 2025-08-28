@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ActivationInspector.Application\ActivationInspector.Application.csproj" />
+    <ProjectReference Include="..\ActivationInspector.Domain\ActivationInspector.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Libraries for registry and WMI access -->
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
