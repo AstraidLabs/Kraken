@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Management;
 using System.Windows;
@@ -20,10 +21,20 @@ public partial class MainWindow : Window
 
     private void LoadLicenses()
     {
-        using var searcher = new ManagementObjectSearcher("SELECT Name, LicenseStatus FROM SoftwareLicensingProduct WHERE PartialProductKey IS NOT NULL");
+        LoadLicensesFromClass("SoftwareLicensingProduct", "Windows");
+        LoadLicensesFromClass("OfficeSoftwareProtectionProduct", "Office");
+    }
+
+    private void LoadLicensesFromClass(string wmiClass, string application)
+    {
+        var query = $"SELECT Name, Description, ID, PartialProductKey, LicenseStatus, GracePeriodRemaining, EvaluationEndDate FROM {wmiClass} WHERE PartialProductKey IS NOT NULL";
+        using var searcher = new ManagementObjectSearcher(query);
         foreach (var obj in searcher.Get())
         {
             var name = obj["Name"]?.ToString() ?? string.Empty;
+            var description = obj["Description"]?.ToString() ?? string.Empty;
+            var activationId = obj["ID"]?.ToString() ?? string.Empty;
+            var partialKey = obj["PartialProductKey"]?.ToString() ?? string.Empty;
             var statusCode = obj["LicenseStatus"] != null ? Convert.ToInt32(obj["LicenseStatus"]) : 0;
             var status = statusCode switch
             {
@@ -35,7 +46,30 @@ public partial class MainWindow : Window
                 5 => "Extended Grace",
                 _ => "Unknown"
             };
-            Licenses.Add(new LicenseInfo { Name = name, Status = status });
+            var grace = obj["GracePeriodRemaining"] != null ? Convert.ToInt32(obj["GracePeriodRemaining"]) : 0;
+            DateTime? evalEnd = null;
+            if (obj["EvaluationEndDate"] != null)
+            {
+                try
+                {
+                    evalEnd = ManagementDateTimeConverter.ToDateTime(obj["EvaluationEndDate"].ToString());
+                }
+                catch
+                {
+                    evalEnd = null;
+                }
+            }
+            Licenses.Add(new LicenseInfo
+            {
+                Application = application,
+                Name = name,
+                Description = description,
+                ActivationId = activationId,
+                PartialProductKey = partialKey,
+                Status = status,
+                GraceMinutes = grace,
+                EvaluationEndDate = evalEnd
+            });
         }
     }
 }
