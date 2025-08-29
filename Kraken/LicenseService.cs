@@ -8,7 +8,7 @@ using Microsoft.Win32;
 namespace Kraken;
 
 /// <summary>
-/// High level helpers that use SppApi and WMI/registry to build license information objects.
+/// High level helpers that use SppManagement, SppApi and WMI/registry to build license information objects.
 /// </summary>
 public static class LicenseService
 {
@@ -18,12 +18,12 @@ public static class LicenseService
     public static LicenseSummary GetLicenseSummary()
     {
         var summary = new LicenseSummary();
-        if (SppApi.TryOpenSession(out var handle))
+        if (SppManagement.TryOpenSession(out var session))
         {
-            using (handle)
+            using (session)
             {
-                summary.WindowsLicense = GetWindowsLicense(handle);
-                summary.OfficeLicenses = GetOfficeLicenses(handle);
+                summary.WindowsLicense = GetWindowsLicense(session);
+                summary.OfficeLicenses = GetOfficeLicenses(session);
             }
         }
         else
@@ -46,9 +46,9 @@ public static class LicenseService
 
     /// <summary>
     /// Collects basic Windows licence information using WMI. If an SPP session is provided,
-    /// an installation ID is generated.
+    /// additional SPP data is retrieved.
     /// </summary>
-    public static WindowsLicenseInfo? GetWindowsLicense(SppApi.SppSafeHandle? h)
+    public static WindowsLicenseInfo? GetWindowsLicense(SppManagement? s)
     {
         try
         {
@@ -68,15 +68,15 @@ public static class LicenseService
                     EvaluationEndDate = ParseDate(obj["EvaluationEndDate"])
                 };
 
-                if (h != null)
+                if (s != null)
                 {
-                    info.LastActivationTime = ParseDate(SppApi.GetWindowsString("LastActivationTime"));
-                    var hres = SppApi.GetWindowsDWord("LastActivationHR");
+                    info.LastActivationTime = ParseDate(s.GetWindowsString("LastActivationTime"));
+                    var hres = s.GetWindowsDWord("LastActivationHR");
                     if (hres.HasValue) info.LastActivationHResult = (int)hres.Value;
-                    info.KernelTimeBomb = ParseDate(SppApi.GetWindowsString("KernelDebuggerTimeBomb"));
-                    info.SystemTimeBomb = ParseDate(SppApi.GetWindowsString("TimeBomb"));
-                    info.TrustedTime = ParseDate(SppApi.GetWindowsString("TrustedTime"));
-                    var rearm = SppApi.GetWindowsDWord("RemainingWindowsRearmCount");
+                    info.KernelTimeBomb = ParseDate(s.GetWindowsString("KernelDebuggerTimeBomb"));
+                    info.SystemTimeBomb = ParseDate(s.GetWindowsString("TimeBomb"));
+                    info.TrustedTime = ParseDate(s.GetWindowsString("TrustedTime"));
+                    var rearm = s.GetWindowsDWord("RemainingWindowsRearmCount");
                     if (rearm.HasValue) info.RearmCount = (int)rearm.Value;
                     if (SppApi.SLIsWindowsGenuineLocal(out uint genuine) == 0)
                         info.IsWindowsGenuineLocal = genuine != 0;
@@ -116,10 +116,10 @@ public static class LicenseService
     }
 
     /// <summary>
-    /// Retrieves Office licence information using WMI. If SPP handle provided, installation IDs
-    /// are generated for each product.
+    /// Retrieves Office licence information using WMI. If an SPP session is provided,
+    /// installation IDs are generated for each product.
     /// </summary>
-    public static List<OfficeLicenseInfo> GetOfficeLicenses(SppApi.SppSafeHandle? h)
+    public static List<OfficeLicenseInfo> GetOfficeLicenses(SppManagement? s)
     {
         var list = new List<OfficeLicenseInfo>();
         try
@@ -141,12 +141,12 @@ public static class LicenseService
                     Channel = obj["ProductKeyChannel"]?.ToString() ?? string.Empty,
                     SkuId = obj["ID"]?.ToString() ?? string.Empty
                 };
-                if (h != null && Guid.TryParse(slid, out var guid))
+                if (s != null && Guid.TryParse(slid, out var guid))
                 {
-                    lic.OfflineInstallationId = SppApi.GenerateOfflineInstallationId(h, guid) ?? string.Empty;
-                    var rearm = SppApi.GetWindowsDWord("RemainingAppRearmCount");
+                    lic.OfflineInstallationId = s.GenerateOfflineInstallationId(guid) ?? string.Empty;
+                    var rearm = s.GetWindowsDWord("RemainingAppRearmCount");
                     if (rearm.HasValue) lic.RearmCount = (int)rearm.Value;
-                    lic.TrustedTime = ParseDate(SppApi.GetWindowsString("TrustedTime"));
+                    lic.TrustedTime = ParseDate(s.GetWindowsString("TrustedTime"));
                 }
 
                 string licDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
