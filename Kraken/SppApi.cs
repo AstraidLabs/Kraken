@@ -131,6 +131,15 @@ namespace Kraken
         }
 
         /// <summary>
+        /// Attempts to open an SPP session and returns a boolean indicating success.
+        /// </summary>
+        public static bool TryOpenSession(out SppSafeHandle handle)
+        {
+            var hr = SLOpen(out handle);
+            return hr == 0 && handle != null && !handle.IsInvalid;
+        }
+
+        /// <summary>
         /// Retrieves a list of SLIC identifiers.
         /// </summary>
         /// <param name="h">Session handle.</param>

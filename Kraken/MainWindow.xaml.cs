@@ -1,8 +1,7 @@
 using System;
-using System.Collections.ObjectModel;
+using System.Windows;
 using System.Management;
 using System.Runtime.InteropServices;
-using System.Windows;
 
 namespace Kraken;
 
@@ -11,14 +10,22 @@ namespace Kraken;
 /// </summary>
 public partial class MainWindow : Window
 {
-    private ObservableCollection<LicenseInfo> Licenses { get; } = new();
+    private LicenseSummary? _summary;
 
     public MainWindow()
     {
         InitializeComponent();
-        LicensesGrid.ItemsSource = Licenses;
         DisplaySystemInfo();
-        LoadLicenses();
+        RefreshData();
+    }
+
+    private void RefreshData()
+    {
+        _summary = LicenseService.GetLicenseSummary();
+        if (_summary != null)
+        {
+            LicensesGrid.ItemsSource = _summary.OfficeLicenses;
+        }
     }
 
     private void DisplaySystemInfo()
@@ -40,81 +47,6 @@ public partial class MainWindow : Window
         catch (ManagementException)
         {
             SystemInfoText.Text = $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})";
-        }
-    }
-
-    private void LoadLicenses()
-    {
-        LoadLicensesFromClass("SoftwareLicensingProduct", "Windows");
-        LoadLicensesFromClass("OfficeSoftwareProtectionProduct", "Office");
-    }
-
-    private void LoadLicensesFromClass(string wmiClass, string application)
-    {
-        var query =
-            $"SELECT Name, Description, ID, PartialProductKey, LicenseStatus, GracePeriodRemaining, EvaluationEndDate FROM {wmiClass} WHERE PartialProductKey IS NOT NULL";
-
-        try
-        {
-            using var searcher = new ManagementObjectSearcher(query);
-            SppApi.SLOpen(out var hSLC);
-            using (hSLC)
-            {
-                foreach (var obj in searcher.Get())
-                {
-                    var name = obj["Name"]?.ToString() ?? string.Empty;
-                    var description = obj["Description"]?.ToString() ?? string.Empty;
-                    var activationId = obj["ID"]?.ToString() ?? string.Empty;
-                    var partialKey = obj["PartialProductKey"]?.ToString() ?? string.Empty;
-                    var statusCode = obj["LicenseStatus"] != null ? Convert.ToInt32(obj["LicenseStatus"]) : 0;
-                    var status = statusCode switch
-                    {
-                        0 => "Unlicensed",
-                        1 => "Licensed",
-                        2 => "Grace",
-                        3 => "Notification",
-                        4 => "Expired",
-                        5 => "Extended Grace",
-                        _ => "Unknown"
-                    };
-                    var grace = obj["GracePeriodRemaining"] != null ? Convert.ToInt32(obj["GracePeriodRemaining"]) : 0;
-                    DateTime? evalEnd = null;
-                    if (obj["EvaluationEndDate"] != null)
-                    {
-                        try
-                        {
-                            evalEnd = ManagementDateTimeConverter.ToDateTime(obj["EvaluationEndDate"].ToString());
-                        }
-                        catch
-                        {
-                            evalEnd = null;
-                        }
-                    }
-
-                    string installationId = string.Empty;
-                    if (!hSLC.IsInvalid && Guid.TryParse(activationId, out var sku))
-                    {
-                        installationId = SppApi.GenerateOfflineInstallationId(hSLC, sku) ?? string.Empty;
-                    }
-
-                    Licenses.Add(new LicenseInfo
-                    {
-                        Application = application,
-                        Name = name,
-                        Description = description,
-                        ActivationId = activationId,
-                        PartialProductKey = partialKey,
-                        Status = status,
-                        GraceMinutes = grace,
-                        EvaluationEndDate = evalEnd,
-                        InstallationId = installationId
-                    });
-                }
-            }
-        }
-        catch (ManagementException)
-        {
-            // The WMI class may not exist on this system; ignore and continue.
         }
     }
 }
