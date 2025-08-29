@@ -38,14 +38,13 @@ public class WindowsLicenseInfo
     public string Channel { get; set; } = string.Empty;
     public DateTime? EvaluationEndDate { get; set; }
     public DateTime? LastActivationTime { get; set; }
-    public int LastActivationHResult { get; set; }
+    public int? LastActivationHResult { get; set; }
     public DateTime? KernelTimeBomb { get; set; }
     public DateTime? SystemTimeBomb { get; set; }
     public DateTime? TrustedTime { get; set; }
-    public int RearmCount { get; set; }
-    public bool IsDigitalLicense { get; set; }
-    public bool IsWindowsGenuineLocal { get; set; }
-    public List<string> LicenseKeyFiles { get; set; } = new();
+    public int? RearmCount { get; set; }
+    public bool? IsWindowsGenuineLocal { get; set; }
+    public List<string> LicenseKeyFiles { get; } = new();
 }
 
 public class OfficeLicenseInfo
@@ -61,8 +60,8 @@ public class OfficeLicenseInfo
     public string Channel { get; set; } = string.Empty;
     public string OfflineInstallationId { get; set; } = string.Empty;
     public DateTime? TrustedTime { get; set; }
-    public int RearmCount { get; set; }
-    public List<string> LicenseKeyFiles { get; set; } = new();
+    public int? RearmCount { get; set; }
+    public List<string> LicenseKeyFiles { get; } = new();
 }
 
 public class KmsServerInfo
@@ -137,4 +136,6 @@ public class LicenseSummary
     public VNextInfo? VNext { get; set; }
     public AdActivationInfo? AdActivation { get; set; }
     public VmActivationInfo? VmActivation { get; set; }
+    public bool IsDigitalLicense { get; set; }
+    public bool SharedComputerLicensingEnabled { get; set; }
 }

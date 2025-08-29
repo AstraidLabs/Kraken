@@ -30,8 +30,7 @@
                         <DataGridTextColumn Header="SystemTimeBomb" Binding="{Binding SystemTimeBomb}" />
                         <DataGridTextColumn Header="TrustedTime" Binding="{Binding TrustedTime}" />
                         <DataGridTextColumn Header="RearmCount" Binding="{Binding RearmCount}" />
-                        <DataGridCheckBoxColumn Header="IsDigitalLicense" Binding="{Binding IsDigitalLicense}" />
-                        <DataGridCheckBoxColumn Header="IsGenuine" Binding="{Binding IsWindowsGenuineLocal}" />
+                        <DataGridCheckBoxColumn Header="IsGenuine" Binding="{Binding IsWindowsGenuineLocal}" IsThreeState="True" />
                         <DataGridTextColumn Header="LicenseKeyFiles" Binding="{Binding LicenseKeyFiles}" />
                     </DataGrid.Columns>
                 </DataGrid>
