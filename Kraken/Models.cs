@@ -4,13 +4,34 @@ using System.Collections.Generic;
 namespace Kraken;
 
 /// <summary>
-/// POCO models representing various SPP license information blocks.
+/// Licensing state values returned by SPP.
+/// </summary>
+public enum LicenseStatus
+{
+    /// <summary>The licence state could not be determined.</summary>
+    Unknown = -1,
+    /// <summary>The product is not licensed.</summary>
+    Unlicensed = 0,
+    /// <summary>The product is permanently licensed.</summary>
+    Licensed = 1,
+    /// <summary>The product is in the initial grace period.</summary>
+    Grace = 2,
+    /// <summary>The product is in notification mode.</summary>
+    Notification = 3,
+    /// <summary>The product licence has expired.</summary>
+    Expired = 4,
+    /// <summary>The product is in extended grace.</summary>
+    ExtendedGrace = 5
+}
+
+/// <summary>
+/// POCO models representing various SPP licence information blocks.
 /// </summary>
 public class WindowsLicenseInfo
 {
     public string ProductName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
+    public LicenseStatus Status { get; set; } = LicenseStatus.Unknown;
     public int GraceMinutes { get; set; }
     public DateTime? Expiration { get; set; }
     public string PartialProductKey { get; set; } = string.Empty;
@@ -33,7 +54,7 @@ public class OfficeLicenseInfo
     public string SkuId { get; set; } = string.Empty;
     public string ProductName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
+    public LicenseStatus Status { get; set; } = LicenseStatus.Unknown;
     public int GraceMinutes { get; set; }
     public DateTime? Expiration { get; set; }
     public string PartialProductKey { get; set; } = string.Empty;
