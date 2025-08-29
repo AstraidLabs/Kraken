@@ -61,7 +61,7 @@ public static class LicenseService
                     ProductName = obj["Name"]?.ToString() ?? string.Empty,
                     Description = obj["Description"]?.ToString() ?? string.Empty,
                     PartialProductKey = obj["PartialProductKey"]?.ToString() ?? string.Empty,
-                    Status = LicenseStatusToString(obj["LicenseStatus"]),
+                    Status = ParseLicenseStatus(obj["LicenseStatus"]),
                     GraceMinutes = obj["GracePeriodRemaining"] != null ? Convert.ToInt32(obj["GracePeriodRemaining"]) : 0,
                     Expiration = ParseDate(obj["EvaluationEndDate"]),
                     Channel = obj["ProductKeyChannel"]?.ToString() ?? string.Empty,
@@ -135,7 +135,7 @@ public static class LicenseService
                     ProductName = obj["Name"]?.ToString() ?? string.Empty,
                     Description = obj["Description"]?.ToString() ?? string.Empty,
                     PartialProductKey = obj["PartialProductKey"]?.ToString() ?? string.Empty,
-                    Status = LicenseStatusToString(obj["LicenseStatus"]),
+                    Status = ParseLicenseStatus(obj["LicenseStatus"]),
                     GraceMinutes = obj["GracePeriodRemaining"] != null ? Convert.ToInt32(obj["GracePeriodRemaining"]) : 0,
                     Expiration = ParseDate(obj["EvaluationEndDate"]),
                     Channel = obj["ProductKeyChannel"]?.ToString() ?? string.Empty,
@@ -399,20 +399,27 @@ public static class LicenseService
         return false;
     }
 
-    private static string LicenseStatusToString(object? statusObj)
+    private static LicenseStatus ParseLicenseStatus(object? statusObj)
     {
-        if (statusObj == null) return string.Empty;
-        int status = Convert.ToInt32(statusObj);
-        return status switch
+        if (statusObj == null) return LicenseStatus.Unknown;
+        try
         {
-            0 => "Unlicensed",
-            1 => "Licensed",
-            2 => "Grace",
-            3 => "Notification",
-            4 => "Expired",
-            5 => "Extended Grace",
-            _ => "Unknown"
-        };
+            var status = Convert.ToInt32(statusObj);
+            return status switch
+            {
+                0 => LicenseStatus.Unlicensed,
+                1 => LicenseStatus.Licensed,
+                2 => LicenseStatus.Grace,
+                3 => LicenseStatus.Notification,
+                4 => LicenseStatus.Expired,
+                5 => LicenseStatus.ExtendedGrace,
+                _ => LicenseStatus.Unknown
+            };
+        }
+        catch
+        {
+            return LicenseStatus.Unknown;
+        }
     }
 
     private static DateTime? ParseDate(object? obj)
