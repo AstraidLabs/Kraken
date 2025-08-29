@@ -31,10 +31,12 @@ public class WindowsLicenseInfo
 {
     public string ProductName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string SkuId { get; set; } = string.Empty;
     public LicenseStatus Status { get; set; } = LicenseStatus.Unknown;
     public int GraceMinutes { get; set; }
     public DateTime? Expiration { get; set; }
     public string PartialProductKey { get; set; } = string.Empty;
+    public string OfflineInstallationId { get; set; } = string.Empty;
     public string Channel { get; set; } = string.Empty;
     public DateTime? EvaluationEndDate { get; set; }
     public DateTime? LastActivationTime { get; set; }

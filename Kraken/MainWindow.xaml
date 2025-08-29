@@ -18,10 +18,12 @@
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="ProductName" Binding="{Binding ProductName}" />
                         <DataGridTextColumn Header="Description" Binding="{Binding Description}" />
+                        <DataGridTextColumn Header="SkuId" Binding="{Binding SkuId}" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" />
                         <DataGridTextColumn Header="GraceMinutes" Binding="{Binding GraceMinutes}" />
                         <DataGridTextColumn Header="Expiration" Binding="{Binding Expiration}" />
                         <DataGridTextColumn Header="PartialProductKey" Binding="{Binding PartialProductKey}" />
+                        <DataGridTextColumn Header="OfflineInstallationId" Binding="{Binding OfflineInstallationId}" />
                         <DataGridTextColumn Header="Channel" Binding="{Binding Channel}" />
                         <DataGridTextColumn Header="EvaluationEndDate" Binding="{Binding EvaluationEndDate}" />
                         <DataGridTextColumn Header="LastActivationTime" Binding="{Binding LastActivationTime}" />

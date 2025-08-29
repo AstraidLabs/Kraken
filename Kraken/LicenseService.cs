@@ -77,10 +77,12 @@ public static class LicenseService
             using var searcher = new ManagementObjectSearcher(wql);
             foreach (ManagementObject obj in searcher.Get())
             {
+                var sku = obj["ID"]?.ToString() ?? string.Empty;
                 var info = new WindowsLicenseInfo
                 {
                     ProductName = obj["Name"]?.ToString() ?? string.Empty,
                     Description = obj["Description"]?.ToString() ?? string.Empty,
+                    SkuId = sku,
                     PartialProductKey = obj["PartialProductKey"]?.ToString() ?? string.Empty,
                     Status = ParseLicenseStatus(obj["LicenseStatus"]),
                     GraceMinutes = obj["GracePeriodRemaining"] != null
@@ -104,6 +106,9 @@ public static class LicenseService
 
                     var rearm = s.GetWindowsDWord("RemainingWindowsRearmCount");
                     if (rearm.HasValue) info.RearmCount = (int)rearm.Value;
+
+                    if (Guid.TryParse(sku, out var g))
+                        info.OfflineInstallationId = s.GenerateOfflineInstallationId(g) ?? string.Empty;
 
                     if (SppApi.SLIsWindowsGenuineLocal(out uint genuine) == 0)
                         info.IsWindowsGenuineLocal = genuine != 0;
