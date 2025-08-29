@@ -1,4 +1,4 @@
-﻿<Window x:Class="Kraken.MainWindow"
+<Window x:Class="Kraken.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -9,9 +9,66 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <TextBlock x:Name="SystemInfoText" Margin="5" />
-        <DataGrid x:Name="LicensesGrid" AutoGenerateColumns="True" Grid.Row="1" />
+        <TextBlock Margin="5" Text="{Binding SystemInfo}" />
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="5">
+            <Button Content="Refresh" Command="{Binding RefreshCommand}" Margin="0,0,5,0" />
+            <Button Content="Save JSON" Command="{Binding SaveJsonCommand}" />
+        </StackPanel>
+        <TabControl Grid.Row="2">
+            <TabItem Header="Windows">
+                <DataGrid ItemsSource="{Binding WindowsLicenseList}" AutoGenerateColumns="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" />
+                        <DataGridTextColumn Header="Description" Binding="{Binding Description}" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" />
+                        <DataGridTextColumn Header="Grace" Binding="{Binding GraceMinutes}" />
+                        <DataGridTextColumn Header="Expiration" Binding="{Binding Expiration}" />
+                        <DataGridTextColumn Header="ProductKey" Binding="{Binding PartialProductKey}" />
+                        <DataGridTextColumn Header="Channel" Binding="{Binding Channel}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="Office">
+                <DataGrid ItemsSource="{Binding Summary.OfficeLicenses}" AutoGenerateColumns="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="SLID" Binding="{Binding SLID}" />
+                        <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" />
+                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" />
+                        <DataGridTextColumn Header="Grace" Binding="{Binding GraceMinutes}" />
+                        <DataGridTextColumn Header="Expiration" Binding="{Binding Expiration}" />
+                        <DataGridTextColumn Header="ProductKey" Binding="{Binding PartialProductKey}" />
+                        <DataGridTextColumn Header="Channel" Binding="{Binding Channel}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="KMS Server">
+                <DataGrid ItemsSource="{Binding KmsServerList}" AutoGenerateColumns="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" />
+                        <DataGridTextColumn Header="Port" Binding="{Binding Port}" />
+                        <DataGridTextColumn Header="IP" Binding="{Binding IPAddress}" />
+                        <DataGridTextColumn Header="Current" Binding="{Binding CurrentClients}" />
+                        <DataGridTextColumn Header="Total" Binding="{Binding TotalRequests}" />
+                        <DataGridTextColumn Header="Failed" Binding="{Binding FailedRequests}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="KMS Client">
+                <DataGrid ItemsSource="{Binding KmsClientList}" AutoGenerateColumns="False">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Client PID" Binding="{Binding ClientPid}" />
+                        <DataGridTextColumn Header="Server" Binding="{Binding ServerName}" />
+                        <DataGridTextColumn Header="Server Port" Binding="{Binding ServerPort}" />
+                        <DataGridTextColumn Header="Discovered Name" Binding="{Binding DiscoveredName}" />
+                        <DataGridTextColumn Header="Discovered Port" Binding="{Binding DiscoveredPort}" />
+                        <DataGridTextColumn Header="Discovered IP" Binding="{Binding DiscoveredIP}" />
+                        <DataGridTextColumn Header="Renewal" Binding="{Binding RenewalInterval}" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+        </TabControl>
     </Grid>
 </Window>

@@ -14,6 +14,16 @@ public class WindowsLicenseInfo
     public int GraceMinutes { get; set; }
     public DateTime? Expiration { get; set; }
     public string PartialProductKey { get; set; } = string.Empty;
+    public string Channel { get; set; } = string.Empty;
+    public DateTime? EvaluationEndDate { get; set; }
+    public DateTime? LastActivationTime { get; set; }
+    public int LastActivationHResult { get; set; }
+    public DateTime? KernelTimeBomb { get; set; }
+    public DateTime? SystemTimeBomb { get; set; }
+    public DateTime? TrustedTime { get; set; }
+    public int RearmCount { get; set; }
+    public bool IsDigitalLicense { get; set; }
+    public List<string> LicenseKeyFiles { get; set; } = new();
 }
 
 public class OfficeLicenseInfo

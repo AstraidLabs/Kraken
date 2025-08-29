@@ -11,6 +11,48 @@ namespace Kraken
         private const int ERROR_MOD_NOT_FOUND = unchecked((int)0x8007007E);
         private const int ERROR_PROC_NOT_FOUND = unchecked((int)0x8007007F);
 
+        /// <summary>Represents licensing status information.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SLSTATUS
+        {
+            public Guid SkuId;
+            public uint eStatus;
+            public ulong qwGraceTime;
+            public uint hrReason;
+        }
+
+        /// <summary>Represents public key information.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SLGETPKEYINFO
+        {
+            public Guid PKeyId;
+            public Guid SkuId;
+        }
+
+        /// <summary>Represents SKU information.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SLGETSKUID
+        {
+            public Guid SkuId;
+        }
+
+        /// <summary>Represents service information.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SLGETSERVICEINFO
+        {
+            public uint cbSize;
+            public IntPtr pwszValue;
+        }
+
+        /// <summary>Represents application information.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SLGETAPPLICATIONINFO
+        {
+            public Guid AppId;
+            public uint cbSize;
+            public IntPtr pwszValue;
+        }
+
         /// <summary>
         /// Represents a safe handle for an SPP session.
         /// </summary>
@@ -243,6 +285,34 @@ namespace Kraken
         }
 
         /// <summary>
+        /// Gets licensing status structures for a given application and SKU.
+        /// </summary>
+        public static SLSTATUS[] GetLicensingStatus(SppSafeHandle h, Guid appId, Guid skuId)
+        {
+            var result = Array.Empty<SLSTATUS>();
+            int hr = SLGetLicensingStatusInformation(h, appId, skuId, out var pStatus, out var count);
+            if (hr != 0 || pStatus == IntPtr.Zero || count == 0)
+            {
+                return result;
+            }
+            try
+            {
+                int size = Marshal.SizeOf<SLSTATUS>();
+                result = new SLSTATUS[count];
+                for (int i = 0; i < count; i++)
+                {
+                    IntPtr item = IntPtr.Add(pStatus, i * size);
+                    result[i] = Marshal.PtrToStructure<SLSTATUS>(item);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(pStatus);
+            }
+            return result;
+        }
+
+        /// <summary>
         /// Retrieves public key information.
         /// </summary>
         /// <param name="h">Session handle.</param>
@@ -294,6 +364,31 @@ namespace Kraken
                 }
             }
             return hr;
+        }
+
+        /// <summary>
+        /// Retrieves a public key property as a string.
+        /// </summary>
+        public static string? GetPKeyInfo(SppSafeHandle h, Guid pkeyId, string name)
+        {
+            string? result = null;
+            int hr = SLGetPKeyInformation(h, pkeyId, name, out uint t, out uint c, out IntPtr data);
+            if (hr != 0 || data == IntPtr.Zero)
+            {
+                return null;
+            }
+            try
+            {
+                if (t == 1) // Unicode string
+                {
+                    result = Marshal.PtrToStringUni(data);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(data);
+            }
+            return result;
         }
 
         /// <summary>
@@ -351,6 +446,31 @@ namespace Kraken
         }
 
         /// <summary>
+        /// Retrieves a SKU property as a string.
+        /// </summary>
+        public static string? GetSkuInfo(SppSafeHandle h, Guid skuId, string name)
+        {
+            string? result = null;
+            int hr = SLGetProductSkuInformation(h, skuId, name, out uint t, out uint c, out IntPtr data);
+            if (hr != 0 || data == IntPtr.Zero)
+            {
+                return null;
+            }
+            try
+            {
+                if (t == 1)
+                {
+                    result = Marshal.PtrToStringUni(data);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(data);
+            }
+            return result;
+        }
+
+        /// <summary>
         /// Retrieves service information.
         /// </summary>
         /// <param name="h">Session handle.</param>
@@ -401,6 +521,31 @@ namespace Kraken
                 }
             }
             return hr;
+        }
+
+        /// <summary>
+        /// Retrieves service information as a string.
+        /// </summary>
+        public static string? GetServiceInfo(SppSafeHandle h, string name)
+        {
+            string? result = null;
+            int hr = SLGetServiceInformation(h, name, out uint t, out uint c, out IntPtr data);
+            if (hr != 0 || data == IntPtr.Zero)
+            {
+                return null;
+            }
+            try
+            {
+                if (t == 1)
+                {
+                    result = Marshal.PtrToStringUni(data);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(data);
+            }
+            return result;
         }
 
         /// <summary>
@@ -455,6 +600,31 @@ namespace Kraken
                 }
             }
             return hr;
+        }
+
+        /// <summary>
+        /// Retrieves application information as a string.
+        /// </summary>
+        public static string? GetApplicationInfo(SppSafeHandle h, Guid appId, string name)
+        {
+            string? result = null;
+            int hr = SLGetApplicationInformation(h, appId, name, out uint t, out uint c, out IntPtr data);
+            if (hr != 0 || data == IntPtr.Zero)
+            {
+                return null;
+            }
+            try
+            {
+                if (t == 1)
+                {
+                    result = Marshal.PtrToStringUni(data);
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(data);
+            }
+            return result;
         }
 
         /// <summary>
