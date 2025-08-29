@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Management;
+using System.Text.Json;
 using Microsoft.Win32;
 
 namespace Kraken;
@@ -65,6 +67,44 @@ public static class LicenseService
                     Channel = obj["ProductKeyChannel"]?.ToString() ?? string.Empty,
                     EvaluationEndDate = ParseDate(obj["EvaluationEndDate"])
                 };
+
+                if (h != null)
+                {
+                    info.LastActivationTime = ParseDate(SppApi.GetWindowsString("LastActivationTime"));
+                    var hres = SppApi.GetWindowsDWord("LastActivationHR");
+                    if (hres.HasValue) info.LastActivationHResult = (int)hres.Value;
+                    info.KernelTimeBomb = ParseDate(SppApi.GetWindowsString("KernelDebuggerTimeBomb"));
+                    info.SystemTimeBomb = ParseDate(SppApi.GetWindowsString("TimeBomb"));
+                    info.TrustedTime = ParseDate(SppApi.GetWindowsString("TrustedTime"));
+                    var rearm = SppApi.GetWindowsDWord("RemainingWindowsRearmCount");
+                    if (rearm.HasValue) info.RearmCount = (int)rearm.Value;
+                    if (SppApi.SLIsWindowsGenuineLocal(out uint genuine) == 0)
+                        info.IsWindowsGenuineLocal = genuine != 0;
+                }
+
+                var licDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Microsoft", "Office", "Licenses");
+                if (Directory.Exists(licDir))
+                {
+                    foreach (var file in Directory.GetFiles(licDir, "*.json", SearchOption.AllDirectories))
+                    {
+                        info.LicenseKeyFiles.Add(Path.GetFileName(file));
+                        try
+                        {
+                            using var doc = JsonDocument.Parse(File.ReadAllText(file));
+                            if (doc.RootElement.TryGetProperty("PartialProductKey", out var pk))
+                            {
+                                var val = pk.GetString();
+                                if (!string.IsNullOrEmpty(val))
+                                    info.PartialProductKey = val;
+                            }
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+
                 return info;
             }
         }
@@ -98,8 +138,27 @@ public static class LicenseService
                     Status = LicenseStatusToString(obj["LicenseStatus"]),
                     GraceMinutes = obj["GracePeriodRemaining"] != null ? Convert.ToInt32(obj["GracePeriodRemaining"]) : 0,
                     Expiration = ParseDate(obj["EvaluationEndDate"]),
-                    Channel = obj["ProductKeyChannel"]?.ToString() ?? string.Empty
+                    Channel = obj["ProductKeyChannel"]?.ToString() ?? string.Empty,
+                    SkuId = obj["ID"]?.ToString() ?? string.Empty
                 };
+                if (h != null && Guid.TryParse(slid, out var guid))
+                {
+                    lic.OfflineInstallationId = SppApi.GenerateOfflineInstallationId(h, guid) ?? string.Empty;
+                    var rearm = SppApi.GetWindowsDWord("RemainingAppRearmCount");
+                    if (rearm.HasValue) lic.RearmCount = (int)rearm.Value;
+                    lic.TrustedTime = ParseDate(SppApi.GetWindowsString("TrustedTime"));
+                }
+
+                string licDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Microsoft", "Office", "Licenses", slid);
+                if (Directory.Exists(licDir))
+                {
+                    foreach (var file in Directory.GetFiles(licDir, "*.json", SearchOption.AllDirectories))
+                    {
+                        lic.LicenseKeyFiles.Add(Path.GetFileName(file));
+                    }
+                }
+
                 list.Add(lic);
             }
         }
@@ -118,7 +177,7 @@ public static class LicenseService
         try
         {
             using var searcher = new ManagementObjectSearcher(
-                "SELECT KeyManagementServiceCurrentCount, KeyManagementServiceTotalRequests, KeyManagementServiceFailedRequests, KeyManagementServiceMachineName, KeyManagementServicePort, KeyManagementServiceMachineIpAddress FROM SoftwareLicensingService");
+                "SELECT KeyManagementServiceCurrentCount, KeyManagementServiceTotalRequests, KeyManagementServiceFailedRequests, KeyManagementServiceMachineName, KeyManagementServicePort, KeyManagementServiceMachineIpAddress, ServiceState, ServiceStatus FROM SoftwareLicensingService");
             foreach (var obj in searcher.Get())
             {
                 return new KmsServerInfo
@@ -128,7 +187,9 @@ public static class LicenseService
                     FailedRequests = Convert.ToInt32(obj["KeyManagementServiceFailedRequests"] ?? 0),
                     Name = obj["KeyManagementServiceMachineName"]?.ToString() ?? string.Empty,
                     Port = obj["KeyManagementServicePort"] != null ? Convert.ToInt32(obj["KeyManagementServicePort"]) : 0,
-                    IPAddress = obj["KeyManagementServiceMachineIpAddress"]?.ToString() ?? string.Empty
+                    IPAddress = obj["KeyManagementServiceMachineIpAddress"]?.ToString() ?? string.Empty,
+                    ServiceState = obj["ServiceState"]?.ToString() ?? string.Empty,
+                    ServiceStatus = obj["ServiceStatus"]?.ToString() ?? string.Empty
                 };
             }
         }
@@ -146,7 +207,7 @@ public static class LicenseService
         try
         {
             using var searcher = new ManagementObjectSearcher(
-                "SELECT ClientMachineID, KeyManagementServiceMachineName, KeyManagementServicePort, DiscoveredKeyManagementServiceMachineName, DiscoveredKeyManagementServiceMachinePort, DiscoveredKeyManagementServiceMachineIpAddress, VLActivationInterval FROM SoftwareLicensingService");
+                "SELECT ClientMachineID, KeyManagementServiceMachineName, KeyManagementServicePort, DiscoveredKeyManagementServiceMachineName, DiscoveredKeyManagementServiceMachinePort, DiscoveredKeyManagementServiceMachineIpAddress, VLActivationInterval, KeyManagementServiceActivationID, ProductActivationLastAttemptTime, RemainingWindowsRearmCount FROM SoftwareLicensingService");
             foreach (var obj in searcher.Get())
             {
                 return new KmsClientInfo
@@ -157,7 +218,10 @@ public static class LicenseService
                     DiscoveredName = obj["DiscoveredKeyManagementServiceMachineName"]?.ToString() ?? string.Empty,
                     DiscoveredPort = obj["DiscoveredKeyManagementServiceMachinePort"] != null ? Convert.ToInt32(obj["DiscoveredKeyManagementServiceMachinePort"]) : 0,
                     DiscoveredIP = obj["DiscoveredKeyManagementServiceMachineIpAddress"]?.ToString() ?? string.Empty,
-                    RenewalInterval = obj["VLActivationInterval"] != null ? Convert.ToInt32(obj["VLActivationInterval"]) : 0
+                    RenewalInterval = obj["VLActivationInterval"] != null ? Convert.ToInt32(obj["VLActivationInterval"]) : 0,
+                    ActivationId = obj["KeyManagementServiceActivationID"]?.ToString() ?? string.Empty,
+                    LastActivationTime = ParseDate(obj["ProductActivationLastAttemptTime"]),
+                    RearmCount = obj["RemainingWindowsRearmCount"] != null ? Convert.ToInt32(obj["RemainingWindowsRearmCount"]) : 0
                 };
             }
         }
@@ -200,7 +264,9 @@ public static class LicenseService
                 {
                     Enabled = status.dwEnabled != 0,
                     Sku = status.dwSku,
-                    State = status.dwState
+                    State = status.dwState,
+                    LicenseExpiration = status.dwLicenseExpiration != 0 ? DateTimeOffset.FromUnixTimeSeconds(status.dwLicenseExpiration).DateTime : null,
+                    SubscriptionType = status.dwSubscriptionType
                 };
             }
         }
@@ -241,6 +307,16 @@ public static class LicenseService
                     info.Licenses.Add(sub);
                 }
             }
+
+            string licDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Microsoft", "Office", "Licenses");
+            if (Directory.Exists(licDir))
+            {
+                foreach (var file in Directory.GetFiles(licDir, "*.json", SearchOption.AllDirectories))
+                {
+                    info.LicenseKeyFiles.Add(Path.GetFileName(file));
+                }
+            }
             return info;
         }
         catch
@@ -257,7 +333,7 @@ public static class LicenseService
         try
         {
             using var searcher = new ManagementObjectSearcher(
-                "SELECT ADActivationObjectName, ADActivationObjectDN, KeyManagementServiceProductKeyID, KeyManagementServiceSkuID FROM SoftwareLicensingService");
+                "SELECT ADActivationObjectName, ADActivationObjectDN, KeyManagementServiceProductKeyID, KeyManagementServiceSkuID, KeyManagementServiceActivationID FROM SoftwareLicensingService");
             foreach (var obj in searcher.Get())
             {
                 return new AdActivationInfo
@@ -265,7 +341,8 @@ public static class LicenseService
                     ObjectName = obj["ADActivationObjectName"]?.ToString() ?? string.Empty,
                     ObjectDN = obj["ADActivationObjectDN"]?.ToString() ?? string.Empty,
                     CsvlkPid = obj["KeyManagementServiceProductKeyID"]?.ToString() ?? string.Empty,
-                    CsvlkSkuId = obj["KeyManagementServiceSkuID"]?.ToString() ?? string.Empty
+                    CsvlkSkuId = obj["KeyManagementServiceSkuID"]?.ToString() ?? string.Empty,
+                    ActivationId = obj["KeyManagementServiceActivationID"]?.ToString() ?? string.Empty
                 };
             }
         }
@@ -283,7 +360,7 @@ public static class LicenseService
         try
         {
             using var searcher = new ManagementObjectSearcher(
-                "SELECT InheritedActivationID, VirtualizationHostMachineName, VirtualizationHostDigitalPid2, VirtualizationActivationTime FROM SoftwareLicensingService");
+                "SELECT InheritedActivationID, VirtualizationHostMachineName, VirtualizationHostDigitalPid2, VirtualizationActivationTime, VirtualizationHostMachineID, VirtualizationHostMachineVersion FROM SoftwareLicensingService");
             foreach (var obj in searcher.Get())
             {
                 return new VmActivationInfo
@@ -291,7 +368,9 @@ public static class LicenseService
                     InheritedActivationId = obj["InheritedActivationID"]?.ToString() ?? string.Empty,
                     HostMachineName = obj["VirtualizationHostMachineName"]?.ToString() ?? string.Empty,
                     HostDigitalPid2 = obj["VirtualizationHostDigitalPid2"]?.ToString() ?? string.Empty,
-                    ActivationTime = ParseDate(obj["VirtualizationActivationTime"])
+                    ActivationTime = ParseDate(obj["VirtualizationActivationTime"]),
+                    HostMachineID = obj["VirtualizationHostMachineID"]?.ToString() ?? string.Empty,
+                    HostMachineVersion = obj["VirtualizationHostMachineVersion"]?.ToString() ?? string.Empty
                 };
             }
         }
