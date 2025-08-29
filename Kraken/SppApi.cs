@@ -309,6 +309,133 @@ namespace Kraken
             catch (EntryPointNotFoundException) { return E_PROC_NOT_FOUND; }
         }
 
+        // ---------------- Setters ----------------
+
+        public static int SLSetLicensingStatusInformation(SppSafeHandle h, Guid appId, Guid skuId, string name, string value)
+        {
+            Ensure(h);
+            IntPtr bData = IntPtr.Zero;
+            try
+            {
+                bData = Marshal.StringToHGlobalUni(value);
+                uint cData = (uint)(value.Length + 1) * 2;
+                try { return NativeSppc.SLSetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return TrySlc(h, ref appId, ref skuId, name, cData, bData); }
+                catch (EntryPointNotFoundException) { return TrySlc(h, ref appId, ref skuId, name, cData, bData); }
+            }
+            finally
+            {
+                if (bData != IntPtr.Zero) Marshal.FreeHGlobal(bData);
+            }
+
+            static int TrySlc(SppSafeHandle h, ref Guid appId, ref Guid skuId, string name, uint cData, IntPtr bData)
+            {
+                try { return NativeSlc.SLSetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return E_MOD_NOT_FOUND; }
+                catch (EntryPointNotFoundException) { return E_PROC_NOT_FOUND; }
+            }
+        }
+
+        public static int SLSetApplicationInformation(SppSafeHandle h, Guid appId, string name, string value)
+        {
+            Ensure(h);
+            IntPtr bData = IntPtr.Zero;
+            try
+            {
+                bData = Marshal.StringToHGlobalUni(value);
+                uint cData = (uint)(value.Length + 1) * 2;
+                try { return NativeSppc.SLSetApplicationInformation(h.DangerousGetHandle(), ref appId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return TrySlc(h, ref appId, name, cData, bData); }
+                catch (EntryPointNotFoundException) { return TrySlc(h, ref appId, name, cData, bData); }
+            }
+            finally
+            {
+                if (bData != IntPtr.Zero) Marshal.FreeHGlobal(bData);
+            }
+
+            static int TrySlc(SppSafeHandle h, ref Guid appId, string name, uint cData, IntPtr bData)
+            {
+                try { return NativeSlc.SLSetApplicationInformation(h.DangerousGetHandle(), ref appId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return E_MOD_NOT_FOUND; }
+                catch (EntryPointNotFoundException) { return E_PROC_NOT_FOUND; }
+            }
+        }
+
+        public static int SLSetServiceInformation(SppSafeHandle h, string name, string value)
+        {
+            Ensure(h);
+            IntPtr bData = IntPtr.Zero;
+            try
+            {
+                bData = Marshal.StringToHGlobalUni(value);
+                uint cData = (uint)(value.Length + 1) * 2;
+                try { return NativeSppc.SLSetServiceInformation(h.DangerousGetHandle(), name, 1, cData, bData); }
+                catch (DllNotFoundException) { return TrySlc(h, name, cData, bData); }
+                catch (EntryPointNotFoundException) { return TrySlc(h, name, cData, bData); }
+            }
+            finally
+            {
+                if (bData != IntPtr.Zero) Marshal.FreeHGlobal(bData);
+            }
+
+            static int TrySlc(SppSafeHandle h, string name, uint cData, IntPtr bData)
+            {
+                try { return NativeSlc.SLSetServiceInformation(h.DangerousGetHandle(), name, 1, cData, bData); }
+                catch (DllNotFoundException) { return E_MOD_NOT_FOUND; }
+                catch (EntryPointNotFoundException) { return E_PROC_NOT_FOUND; }
+            }
+        }
+
+        public static int SLSetPKeyInformation(SppSafeHandle h, Guid pkeyId, string name, string value)
+        {
+            Ensure(h);
+            IntPtr bData = IntPtr.Zero;
+            try
+            {
+                bData = Marshal.StringToHGlobalUni(value);
+                uint cData = (uint)(value.Length + 1) * 2;
+                try { return NativeSppc.SLSetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return TrySlc(h, ref pkeyId, name, cData, bData); }
+                catch (EntryPointNotFoundException) { return TrySlc(h, ref pkeyId, name, cData, bData); }
+            }
+            finally
+            {
+                if (bData != IntPtr.Zero) Marshal.FreeHGlobal(bData);
+            }
+
+            static int TrySlc(SppSafeHandle h, ref Guid pkeyId, string name, uint cData, IntPtr bData)
+            {
+                try { return NativeSlc.SLSetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return E_MOD_NOT_FOUND; }
+                catch (EntryPointNotFoundException) { return E_PROC_NOT_FOUND; }
+            }
+        }
+
+        public static int SLSetProductSkuInformation(SppSafeHandle h, Guid skuId, string name, string value)
+        {
+            Ensure(h);
+            IntPtr bData = IntPtr.Zero;
+            try
+            {
+                bData = Marshal.StringToHGlobalUni(value);
+                uint cData = (uint)(value.Length + 1) * 2;
+                try { return NativeSppc.SLSetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return TrySlc(h, ref skuId, name, cData, bData); }
+                catch (EntryPointNotFoundException) { return TrySlc(h, ref skuId, name, cData, bData); }
+            }
+            finally
+            {
+                if (bData != IntPtr.Zero) Marshal.FreeHGlobal(bData);
+            }
+
+            static int TrySlc(SppSafeHandle h, ref Guid skuId, string name, uint cData, IntPtr bData)
+            {
+                try { return NativeSlc.SLSetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, 1, cData, bData); }
+                catch (DllNotFoundException) { return E_MOD_NOT_FOUND; }
+                catch (EntryPointNotFoundException) { return E_PROC_NOT_FOUND; }
+            }
+        }
+
         /// <summary>
         /// Interpret (tData,cData,bData) into a managed value. No freeing is performed here.
         /// </summary>
@@ -458,6 +585,11 @@ namespace Kraken
             [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLGetProductSkuInformation(IntPtr hSLC, ref Guid skuId, string valueName, out uint tData, out uint cData, out IntPtr bData);
             [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLGetServiceInformation(IntPtr hSLC, string valueName, out uint tData, out uint cData, out IntPtr bData);
             [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLGetApplicationInformation(IntPtr hSLC, ref Guid appId, string valueName, out uint tData, out uint cData, out IntPtr bData);
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetLicensingStatusInformation(IntPtr hSLC, ref Guid appId, ref Guid skuId, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetApplicationInformation(IntPtr hSLC, ref Guid appId, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetServiceInformation(IntPtr hSLC, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetPKeyInformation(IntPtr hSLC, ref Guid pkeyId, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("sppc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetProductSkuInformation(IntPtr hSLC, ref Guid skuId, string valueName, uint tData, uint cData, IntPtr bData);
         }
 
         internal static class NativeSlc
@@ -474,6 +606,11 @@ namespace Kraken
             [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLGetWindowsInformation(string valueName, out uint tData, out uint cData, out IntPtr bData);
             [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLGetWindowsInformationDWORD(string valueName, out uint dword);
             [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLGetApplicationInformation(IntPtr hSLC, ref Guid appId, string valueName, out uint tData, out uint cData, out IntPtr bData);
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetLicensingStatusInformation(IntPtr hSLC, ref Guid appId, ref Guid skuId, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetApplicationInformation(IntPtr hSLC, ref Guid appId, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetServiceInformation(IntPtr hSLC, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetPKeyInformation(IntPtr hSLC, ref Guid pkeyId, string valueName, uint tData, uint cData, IntPtr bData);
+            [DllImport("slc.dll", CharSet = CharSet.Unicode)] internal static extern int SLSetProductSkuInformation(IntPtr hSLC, ref Guid skuId, string valueName, uint tData, uint cData, IntPtr bData);
         }
     }
 }
