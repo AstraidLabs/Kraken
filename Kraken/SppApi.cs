@@ -534,7 +534,8 @@ namespace Kraken
             public uint dwEnabled;
             public uint dwSku;
             public uint dwState;
-            // Intentionally only the fields present in the PS script.
+            public uint dwLicenseExpiration;
+            public uint dwSubscriptionType;
         }
 
         [DllImport("clipc.dll", CharSet = CharSet.Unicode)]
