@@ -76,10 +76,25 @@ namespace Kraken
             {
                 IntPtr p = IntPtr.Zero;
                 uint c = 0;
-                int hr = CallSlc(() => NativeSlc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out c, out p));
-                ppGuids = p;
-                count = c;
-                return hr;
+                try
+                {
+                    int hr = NativeSlc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out c, out p);
+                    ppGuids = p;
+                    count = c;
+                    return hr;
+                }
+                catch (DllNotFoundException)
+                {
+                    ppGuids = IntPtr.Zero;
+                    count = 0;
+                    return E_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    ppGuids = IntPtr.Zero;
+                    count = 0;
+                    return E_PROC_NOT_FOUND;
+                }
             }
         }
 
@@ -96,10 +111,25 @@ namespace Kraken
             {
                 IntPtr p = IntPtr.Zero;
                 uint c = 0;
-                int hr = CallSlc(() => NativeSlc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out c, out p));
-                ppStatus = p;
-                cStatus = c;
-                return hr;
+                try
+                {
+                    int hr = NativeSlc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out c, out p);
+                    ppStatus = p;
+                    cStatus = c;
+                    return hr;
+                }
+                catch (DllNotFoundException)
+                {
+                    ppStatus = IntPtr.Zero;
+                    cStatus = 0;
+                    return E_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    ppStatus = IntPtr.Zero;
+                    cStatus = 0;
+                    return E_PROC_NOT_FOUND;
+                }
             }
         }
 
@@ -164,8 +194,28 @@ namespace Kraken
                 uint t = 0;
                 uint c = 0;
                 IntPtr b = IntPtr.Zero;
-                int hr = CallSlc(() => NativeSlc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out t, out c, out b));
-                tData = t; cData = c; bData = b; return hr;
+                try
+                {
+                    int hr = NativeSlc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out t, out c, out b);
+                    tData = t;
+                    cData = c;
+                    bData = b;
+                    return hr;
+                }
+                catch (DllNotFoundException)
+                {
+                    tData = 0;
+                    cData = 0;
+                    bData = IntPtr.Zero;
+                    return E_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    tData = 0;
+                    cData = 0;
+                    bData = IntPtr.Zero;
+                    return E_PROC_NOT_FOUND;
+                }
             }
         }
 
@@ -182,8 +232,28 @@ namespace Kraken
                 uint t = 0;
                 uint c = 0;
                 IntPtr b = IntPtr.Zero;
-                int hr = CallSlc(() => NativeSlc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out t, out c, out b));
-                tData = t; cData = c; bData = b; return hr;
+                try
+                {
+                    int hr = NativeSlc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out t, out c, out b);
+                    tData = t;
+                    cData = c;
+                    bData = b;
+                    return hr;
+                }
+                catch (DllNotFoundException)
+                {
+                    tData = 0;
+                    cData = 0;
+                    bData = IntPtr.Zero;
+                    return E_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    tData = 0;
+                    cData = 0;
+                    bData = IntPtr.Zero;
+                    return E_PROC_NOT_FOUND;
+                }
             }
         }
 
@@ -200,8 +270,28 @@ namespace Kraken
                 uint t = 0;
                 uint c = 0;
                 IntPtr b = IntPtr.Zero;
-                int hr = CallSlc(() => NativeSlc.SLGetServiceInformation(h.DangerousGetHandle(), name, out t, out c, out b));
-                tData = t; cData = c; bData = b; return hr;
+                try
+                {
+                    int hr = NativeSlc.SLGetServiceInformation(h.DangerousGetHandle(), name, out t, out c, out b);
+                    tData = t;
+                    cData = c;
+                    bData = b;
+                    return hr;
+                }
+                catch (DllNotFoundException)
+                {
+                    tData = 0;
+                    cData = 0;
+                    bData = IntPtr.Zero;
+                    return E_MOD_NOT_FOUND;
+                }
+                catch (EntryPointNotFoundException)
+                {
+                    tData = 0;
+                    cData = 0;
+                    bData = IntPtr.Zero;
+                    return E_PROC_NOT_FOUND;
+                }
             }
         }
 
@@ -353,13 +443,6 @@ namespace Kraken
         {
             if (h is null || h.IsInvalid)
                 throw new ArgumentException("Invalid SPP handle.", nameof(h));
-        }
-
-        private static int CallSlc(Func<int> f)
-        {
-            try { return f(); }
-            catch (DllNotFoundException) { return E_MOD_NOT_FOUND; }
-            catch (EntryPointNotFoundException) { return E_PROC_NOT_FOUND; }
         }
 
         // ---------------- Native imports ----------------
