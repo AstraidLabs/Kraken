@@ -37,10 +37,8 @@ public static class LicenseService
         summary.VNext = GetVNextInfo();
         summary.AdActivation = GetAdActivationInfo();
         summary.VmActivation = GetVmActivationInfo();
-        if (summary.WindowsLicense != null)
-        {
-            summary.WindowsLicense.IsDigitalLicense = IsDigitalLicense();
-        }
+        summary.IsDigitalLicense = IsDigitalLicense();
+        summary.SharedComputerLicensingEnabled = IsSharedComputerLicensingEnabled();
         return summary;
     }
 
