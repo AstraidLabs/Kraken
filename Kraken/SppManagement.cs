@@ -1,237 +1,213 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-namespace Kraken
+namespace Kraken;
+
+/// <summary>
+/// High‑level, disposable wrapper around <see cref="SppApi"/> that manages an SPP session
+/// and exposes a convenient, type‑safe API for licence data.
+/// </summary>
+public sealed class SppManagement : IDisposable
 {
+    private readonly SppApi.SppSafeHandle _handle;
+    private bool _disposed;
+
     /// <summary>
-    /// Managed wrapper around <see cref="SppApi"/> that opens and maintains an SPP session.
+    /// Opens a new SPP session. Throws <see cref="InvalidOperationException"/> if the session cannot be opened.
     /// </summary>
-    public sealed class SppManagement : IDisposable
+    public SppManagement()
     {
-        private readonly SppApi.SppSafeHandle _handle;
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="SppManagement"/> class and opens an SPP session.
-        /// </summary>
-        /// <exception cref="InvalidOperationException">Thrown when the session cannot be opened.</exception>
-        public SppManagement()
+        if (!SppApi.TryOpenSession(out var handle))
         {
-            if (!SppApi.TryOpenSession(out var handle))
-            {
-                throw new InvalidOperationException("Failed to open SPP session.");
-            }
-
-            _handle = handle;
+            throw new InvalidOperationException("Cannot open SPP session.");
         }
 
-        /// <summary>
-        /// Gets a value indicating whether the SPP session is currently open.
-        /// </summary>
-        public bool IsOpen => !_handle.IsInvalid && !_handle.IsClosed;
+        _handle = handle;
+    }
 
-        /// <summary>
-        /// Enumerates the SLID values for the specified application.
-        /// </summary>
-        /// <param name="appId">Application identifier.</param>
-        /// <returns>Collection of SLID GUIDs.</returns>
-        /// <exception cref="COMException">Thrown when the underlying SPP call fails.</exception>
-        public IEnumerable<Guid> GetSLIDs(Guid appId)
+    /// <summary>
+    /// Indicates whether the underlying SPP session is still open.
+    /// </summary>
+    public bool IsOpen => !_disposed && !_handle.IsInvalid && !_handle.IsClosed;
+
+    #region Core data retrieval
+
+    /// <summary>
+    /// Enumerates all SLID values (GUIDs) associated with the specified application.
+    /// </summary>
+    public IEnumerable<Guid> GetSLIDs(Guid appId)
+    {
+        EnsureNotDisposed();
+        int hr = SppApi.SLGetSLIDList(_handle, appId, out var ppGuids, out var count);
+
+        if (hr != 0)
         {
-            int hr = SppApi.SLGetSLIDList(_handle, appId, out var pGuids, out var count);
-            try
-            {
-                if (hr != 0)
-                {
-                    Marshal.ThrowExceptionForHR(hr);
-                }
-
-                if (count == 0 || pGuids == IntPtr.Zero)
-                {
-                    return Array.Empty<Guid>();
-                }
-
-                var result = new Guid[count];
-                int size = Marshal.SizeOf<Guid>();
-                for (int i = 0; i < count; i++)
-                {
-                    IntPtr ptr = IntPtr.Add(pGuids, i * size);
-                    result[i] = Marshal.PtrToStructure<Guid>(ptr);
-                }
-                return result;
-            }
-            finally
-            {
-                if (pGuids != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(pGuids);
-                }
-            }
+            Marshal.ThrowExceptionForHR(hr);
         }
 
-        /// <summary>
-        /// Retrieves licensing status information for the specified application and SKU.
-        /// </summary>
-        /// <param name="appId">Application identifier.</param>
-        /// <param name="skuId">SKU identifier.</param>
-        /// <returns>Array of licensing status entries.</returns>
-        /// <exception cref="COMException">Thrown when the underlying SPP call fails.</exception>
-        public SppApi.SppLicenseStatus[] GetLicensingStatus(Guid appId, Guid skuId)
+        // No SLIDs – return empty sequence
+        if (count == 0 || ppGuids == IntPtr.Zero)
         {
-            int hr = SppApi.SLGetLicensingStatusInformation(_handle, appId, skuId, out var pStatus, out var count);
-            try
-            {
-                if (hr != 0)
-                {
-                    Marshal.ThrowExceptionForHR(hr);
-                }
-
-                return SppApi.ParseLicensingStatus(pStatus, count);
-            }
-            finally
-            {
-                if (pStatus != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(pStatus);
-                }
-            }
+            return Array.Empty<Guid>();
         }
 
-        /// <summary>
-        /// Retrieves a named value associated with a product key.
-        /// </summary>
-        /// <param name="pkeyId">Product key identifier.</param>
-        /// <param name="name">Name of the value to retrieve.</param>
-        /// <returns>The interpreted value.</returns>
-        /// <exception cref="COMException">Thrown when the underlying SPP call fails.</exception>
-        public SppApi.SppValue GetPKeyInfo(Guid pkeyId, string name)
+        // Copy the native GUID array into managed memory
+        var result = new Guid[count];
+        int size = Marshal.SizeOf<Guid>();
+        for (int i = 0; i < count; i++)
         {
-            int hr = SppApi.SLGetPKeyInformation(_handle, pkeyId, name, out uint t, out uint c, out IntPtr p);
-            try
-            {
-                if (hr != 0)
-                {
-                    Marshal.ThrowExceptionForHR(hr);
-                }
-
-                return SppApi.InterpretValue(t, c, p);
-            }
-            finally
-            {
-                if (p != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(p);
-                }
-            }
+            IntPtr ptr = IntPtr.Add(ppGuids, i * size);
+            result[i] = Marshal.PtrToStructure<Guid>(ptr);
         }
 
-        /// <summary>
-        /// Retrieves a named value associated with a product SKU.
-        /// </summary>
-        /// <param name="skuId">SKU identifier.</param>
-        /// <param name="name">Name of the value to retrieve.</param>
-        /// <returns>The interpreted value.</returns>
-        /// <exception cref="COMException">Thrown when the underlying SPP call fails.</exception>
-        public SppApi.SppValue GetProductSkuInfo(Guid skuId, string name)
-        {
-            int hr = SppApi.SLGetProductSkuInformation(_handle, skuId, name, out uint t, out uint c, out IntPtr p);
-            try
-            {
-                if (hr != 0)
-                {
-                    Marshal.ThrowExceptionForHR(hr);
-                }
+        // Free the native buffer – SPP allocates it via CoTaskMem / GlobalAlloc
+        Marshal.FreeHGlobal(ppGuids);
+        return result;
+    }
 
-                return SppApi.InterpretValue(t, c, p);
-            }
-            finally
-            {
-                if (p != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(p);
-                }
-            }
+    /// <summary>
+    /// Retrieves licensing status information for a specific application/SKU pair.
+    /// </summary>
+    public SppApi.SppLicenseStatus[] GetLicensingStatus(Guid appId, Guid skuId)
+    {
+        EnsureNotDisposed();
+        int hr = SppApi.SLGetLicensingStatusInformation(_handle, appId, skuId, out var ppStatus, out var count);
+
+        if (hr != 0)
+        {
+            Marshal.ThrowExceptionForHR(hr);
         }
 
-        /// <summary>
-        /// Retrieves a named value associated with an application and returns its string representation.
-        /// </summary>
-        /// <param name="appId">Application identifier.</param>
-        /// <param name="name">Name of the value to retrieve.</param>
-        /// <returns>The string value if available; otherwise, <c>null</c>.</returns>
-        /// <exception cref="COMException">Thrown when the underlying SPP call fails.</exception>
-        public string? GetApplicationInfo(Guid appId, string name)
+        if (count == 0 || ppStatus == IntPtr.Zero)
         {
-            int hr = SppApi.SLGetApplicationInformation(_handle, appId, name, out uint t, out uint c, out IntPtr p);
-            try
-            {
-                if (hr != 0)
-                {
-                    Marshal.ThrowExceptionForHR(hr);
-                }
-
-                var v = SppApi.InterpretValue(t, c, p);
-                return v.S;
-            }
-            finally
-            {
-                if (p != IntPtr.Zero)
-                {
-                    Marshal.FreeHGlobal(p);
-                }
-            }
+            return Array.Empty<SppApi.SppLicenseStatus>();
         }
 
-        /// <summary>
-        /// Generates an offline installation identifier for the specified SKU.
-        /// </summary>
-        /// <param name="skuId">SKU identifier.</param>
-        /// <returns>The generated installation identifier or <c>null</c>.</returns>
-        public string? GenerateOfflineInstallationId(Guid skuId) => SppApi.GenerateOfflineInstallationId(_handle, skuId);
+        var statuses = SppApi.ParseLicensingStatus(ppStatus, count);
+        Marshal.FreeHGlobal(ppStatus);
+        return statuses;
+    }
 
-        /// <summary>
-        /// Retrieves a Windows information string.
-        /// </summary>
-        /// <param name="key">Registry key name.</param>
-        /// <returns>The associated string or <c>null</c>.</returns>
-        public string? GetWindowsString(string key) => SppApi.GetWindowsString(key);
+    /// <summary>
+    /// Retrieves a named value (string/uint/ulong) associated with a product key.
+    /// </summary>
+    public SppApi.SppValue GetPKeyInfo(Guid pkeyId, string name)
+    {
+        EnsureNotDisposed();
+        int hr = SppApi.SLGetPKeyInformation(_handle, pkeyId, name,
+                                               out uint t, out uint c, out IntPtr b);
 
-        /// <summary>
-        /// Retrieves a Windows information DWORD value.
-        /// </summary>
-        /// <param name="key">Registry key name.</param>
-        /// <returns>The associated value or <c>null</c>.</returns>
-        public uint? GetWindowsDWord(string key) => SppApi.GetWindowsDWord(key);
-
-        /// <summary>
-        /// Extracts the string component from an <see cref="SppApi.SppValue"/>.
-        /// </summary>
-        /// <param name="v">Value to inspect.</param>
-        /// <returns>The string component if present; otherwise, <c>null</c>.</returns>
-        public static string? GetString(SppApi.SppValue v) => v.S;
-
-        /// <summary>
-        /// Extracts the 32-bit unsigned integer component from an <see cref="SppApi.SppValue"/>.
-        /// </summary>
-        /// <param name="v">Value to inspect.</param>
-        /// <returns>The 32-bit unsigned integer component if present; otherwise, <c>null</c>.</returns>
-        public static uint? GetUInt32(SppApi.SppValue v) => v.U32;
-
-        /// <summary>
-        /// Extracts the 64-bit unsigned integer component from an <see cref="SppApi.SppValue"/>.
-        /// </summary>
-        /// <param name="v">Value to inspect.</param>
-        /// <returns>The 64-bit unsigned integer component if present; otherwise, <c>null</c>.</returns>
-        public static ulong? GetUInt64(SppApi.SppValue v) => v.U64;
-
-        /// <summary>
-        /// Releases the underlying SPP session.
-        /// </summary>
-        public void Dispose()
+        if (hr != 0)
         {
-            _handle.Dispose();
+            Marshal.ThrowExceptionForHR(hr);
+        }
+
+        var value = SppApi.InterpretValue(t, c, b);
+        Marshal.FreeHGlobal(b);
+        return value;
+    }
+
+    /// <summary>
+    /// Retrieves a named value associated with a product SKU.
+    /// </summary>
+    public SppApi.SppValue GetProductSkuInfo(Guid skuId, string name)
+    {
+        EnsureNotDisposed();
+        int hr = SppApi.SLGetProductSkuInformation(_handle, skuId, name,
+                                                     out uint t, out uint c, out IntPtr b);
+
+        if (hr != 0)
+        {
+            Marshal.ThrowExceptionForHR(hr);
+        }
+
+        var value = SppApi.InterpretValue(t, c, b);
+        Marshal.FreeHGlobal(b);
+        return value;
+    }
+
+    /// <summary>
+    /// Retrieves a named value from an application and returns its string representation.
+    /// </summary>
+    public string? GetApplicationInfo(Guid appId, string name)
+    {
+        EnsureNotDisposed();
+        int hr = SppApi.SLGetApplicationInformation(_handle, appId, name,
+                                                      out uint t, out uint c, out IntPtr b);
+
+        if (hr != 0)
+        {
+            Marshal.ThrowExceptionForHR(hr);
+        }
+
+        var value = SppApi.InterpretValue(t, c, b);
+        Marshal.FreeHGlobal(b);
+        return value.S;
+    }
+
+    /// <summary>
+    /// Generates an offline installation identifier for the specified SKU.
+    /// </summary>
+    public string? GenerateOfflineInstallationId(Guid skuId) =>
+        SppApi.GenerateOfflineInstallationId(_handle, skuId);
+
+    #endregion
+
+    #region Windows information helpers
+
+    /// <summary>
+    /// Retrieves a Windows string value from the SPP API.
+    /// </summary>
+    public string? GetWindowsString(string key) => SppApi.GetWindowsString(key);
+
+    /// <summary>
+    /// Retrieves a Windows DWORD value from the SPP API.
+    /// </summary>
+    public uint? GetWindowsDWord(string key) => SppApi.GetWindowsDWord(key);
+
+    #endregion
+
+    #region Value extraction helpers
+
+    /// <summary>Gets the string component of an <see cref="SppApi.SppValue"/>.</summary>
+    public static string? GetString(SppApi.SppValue v) => v.S;
+
+    /// <summary>Gets the 32‑bit unsigned integer component of an <see cref="SppApi.SppValue"/>.</summary>
+    public static uint? GetUInt32(SppApi.SppValue v) => v.U32;
+
+    /// <summary>Gets the 64‑bit unsigned integer component of an <see cref="SppApi.SppValue"/>.</summary>
+    public static ulong? GetUInt64(SppApi.SppValue v) => v.U64;
+
+    #endregion
+
+    #region IDisposable implementation
+
+    /// <summary>
+    /// Releases the underlying SPP session. After calling <c>Dispose</c>, the instance
+    /// cannot be used again and <see cref="IsOpen"/> will return <c>false</c>.
+    /// </summary>
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _handle?.Dispose();   // triggers SPP's SLClose
+            _disposed = true;
             GC.SuppressFinalize(this);
         }
     }
-}
 
+    #endregion
+
+    #region Internals
+
+    private void EnsureNotDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(SppManagement));
+        }
+    }
+
+    #endregion
+}
