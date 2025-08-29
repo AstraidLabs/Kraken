@@ -29,6 +29,8 @@
   <ItemGroup>
     <PackageReference Include="System.Management" Version="9.0.8" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
+    <PackageReference Include="Serilog" Version="3.1.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
   </ItemGroup>
 
 </Project>
