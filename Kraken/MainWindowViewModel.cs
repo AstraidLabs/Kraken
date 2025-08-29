@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.IO;
 using System.Runtime.InteropServices;
-using System.Text.Json;
-using System.Windows.Input;
 using Microsoft.Win32;
 
 namespace Kraken;
@@ -30,12 +27,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>Command to refresh data.</summary>
-    public ICommand RefreshCommand { get; }
-
-    /// <summary>Command to save JSON report.</summary>
-    public ICommand SaveJsonCommand { get; }
-
     /// <summary>Information about the system.</summary>
     public string SystemInfo { get; }
 
@@ -56,8 +47,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
     /// </summary>
     public MainWindowViewModel()
     {
-        RefreshCommand = new RelayCommand(_ => Refresh());
-        SaveJsonCommand = new RelayCommand(_ => SaveJson(), _ => Summary != null);
         SystemInfo = BuildSystemInfo();
         Refresh();
     }
@@ -74,23 +63,6 @@ public class MainWindowViewModel : INotifyPropertyChanged
         }
     }
 
-    private void SaveJson()
-    {
-        try
-        {
-            var dlg = new SaveFileDialog { Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*" };
-            if (dlg.ShowDialog() == true)
-            {
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                var json = JsonSerializer.Serialize(Summary, options);
-                File.WriteAllText(dlg.FileName, json);
-            }
-        }
-        catch
-        {
-            // ignore
-        }
-    }
 
     private string BuildSystemInfo()
     {
