@@ -69,8 +69,18 @@ namespace Kraken
             Ensure(h);
             ppGuids = IntPtr.Zero; count = 0;
             try { return NativeSppc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out count, out ppGuids); }
-            catch (DllNotFoundException) { return CallSlc(() => NativeSlc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out count, out ppGuids)); }
-            catch (EntryPointNotFoundException) { return CallSlc(() => NativeSlc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out count, out ppGuids)); }
+            catch (DllNotFoundException) { return TrySlc(h, ref appId, out ppGuids, out count); }
+            catch (EntryPointNotFoundException) { return TrySlc(h, ref appId, out ppGuids, out count); }
+
+            static int TrySlc(SppSafeHandle h, ref Guid appId, out IntPtr ppGuids, out uint count)
+            {
+                IntPtr p = IntPtr.Zero;
+                uint c = 0;
+                int hr = CallSlc(() => NativeSlc.SLGetSLIDList(h.DangerousGetHandle(), 0, ref appId, 1, out c, out p));
+                ppGuids = p;
+                count = c;
+                return hr;
+            }
         }
 
         /// <summary>Get licensing status info array pointer; parse with <see cref="ParseLicensingStatus"/>.</summary>
@@ -79,8 +89,18 @@ namespace Kraken
             Ensure(h);
             ppStatus = IntPtr.Zero; cStatus = 0;
             try { return NativeSppc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out cStatus, out ppStatus); }
-            catch (DllNotFoundException) { return CallSlc(() => NativeSlc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out cStatus, out ppStatus)); }
-            catch (EntryPointNotFoundException) { return CallSlc(() => NativeSlc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out cStatus, out ppStatus)); }
+            catch (DllNotFoundException) { return TrySlc(h, ref appId, ref skuId, out ppStatus, out cStatus); }
+            catch (EntryPointNotFoundException) { return TrySlc(h, ref appId, ref skuId, out ppStatus, out cStatus); }
+
+            static int TrySlc(SppSafeHandle h, ref Guid appId, ref Guid skuId, out IntPtr ppStatus, out uint cStatus)
+            {
+                IntPtr p = IntPtr.Zero;
+                uint c = 0;
+                int hr = CallSlc(() => NativeSlc.SLGetLicensingStatusInformation(h.DangerousGetHandle(), ref appId, ref skuId, IntPtr.Zero, out c, out p));
+                ppStatus = p;
+                cStatus = c;
+                return hr;
+            }
         }
 
         // The native status layout is not officially documented; the reference PS script treats each entry as 40 bytes:
@@ -136,8 +156,17 @@ namespace Kraken
             Ensure(h);
             tData = 0; cData = 0; bData = IntPtr.Zero;
             try { return NativeSppc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out tData, out cData, out bData); }
-            catch (DllNotFoundException) { return CallSlc(() => NativeSlc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out tData, out cData, out bData)); }
-            catch (EntryPointNotFoundException) { return CallSlc(() => NativeSlc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out tData, out cData, out bData)); }
+            catch (DllNotFoundException) { return TrySlc(h, ref pkeyId, name, out tData, out cData, out bData); }
+            catch (EntryPointNotFoundException) { return TrySlc(h, ref pkeyId, name, out tData, out cData, out bData); }
+
+            static int TrySlc(SppSafeHandle h, ref Guid pkeyId, string name, out uint tData, out uint cData, out IntPtr bData)
+            {
+                uint t = 0;
+                uint c = 0;
+                IntPtr b = IntPtr.Zero;
+                int hr = CallSlc(() => NativeSlc.SLGetPKeyInformation(h.DangerousGetHandle(), ref pkeyId, name, out t, out c, out b));
+                tData = t; cData = c; bData = b; return hr;
+            }
         }
 
         public static int SLGetProductSkuInformation(SppSafeHandle h, Guid skuId, string name, out uint tData, out uint cData, out IntPtr bData)
@@ -145,8 +174,17 @@ namespace Kraken
             Ensure(h);
             tData = 0; cData = 0; bData = IntPtr.Zero;
             try { return NativeSppc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out tData, out cData, out bData); }
-            catch (DllNotFoundException) { return CallSlc(() => NativeSlc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out tData, out cData, out bData)); }
-            catch (EntryPointNotFoundException) { return CallSlc(() => NativeSlc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out tData, out cData, out bData)); }
+            catch (DllNotFoundException) { return TrySlc(h, ref skuId, name, out tData, out cData, out bData); }
+            catch (EntryPointNotFoundException) { return TrySlc(h, ref skuId, name, out tData, out cData, out bData); }
+
+            static int TrySlc(SppSafeHandle h, ref Guid skuId, string name, out uint tData, out uint cData, out IntPtr bData)
+            {
+                uint t = 0;
+                uint c = 0;
+                IntPtr b = IntPtr.Zero;
+                int hr = CallSlc(() => NativeSlc.SLGetProductSkuInformation(h.DangerousGetHandle(), ref skuId, name, out t, out c, out b));
+                tData = t; cData = c; bData = b; return hr;
+            }
         }
 
         public static int SLGetServiceInformation(SppSafeHandle h, string name, out uint tData, out uint cData, out IntPtr bData)
@@ -154,8 +192,17 @@ namespace Kraken
             Ensure(h);
             tData = 0; cData = 0; bData = IntPtr.Zero;
             try { return NativeSppc.SLGetServiceInformation(h.DangerousGetHandle(), name, out tData, out cData, out bData); }
-            catch (DllNotFoundException) { return CallSlc(() => NativeSlc.SLGetServiceInformation(h.DangerousGetHandle(), name, out tData, out cData, out bData)); }
-            catch (EntryPointNotFoundException) { return CallSlc(() => NativeSlc.SLGetServiceInformation(h.DangerousGetHandle(), name, out tData, out cData, out bData)); }
+            catch (DllNotFoundException) { return TrySlc(h, name, out tData, out cData, out bData); }
+            catch (EntryPointNotFoundException) { return TrySlc(h, name, out tData, out cData, out bData); }
+
+            static int TrySlc(SppSafeHandle h, string name, out uint tData, out uint cData, out IntPtr bData)
+            {
+                uint t = 0;
+                uint c = 0;
+                IntPtr b = IntPtr.Zero;
+                int hr = CallSlc(() => NativeSlc.SLGetServiceInformation(h.DangerousGetHandle(), name, out t, out c, out b));
+                tData = t; cData = c; bData = b; return hr;
+            }
         }
 
         public static int SLGetApplicationInformation(SppSafeHandle h, Guid appId, string name, out uint tData, out uint cData, out IntPtr bData)
