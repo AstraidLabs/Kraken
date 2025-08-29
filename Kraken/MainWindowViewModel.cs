@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Windows.Input;
 using Microsoft.Win32;
 
 namespace Kraken;
@@ -24,6 +27,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(WindowsLicenseList));
             OnPropertyChanged(nameof(KmsServerList));
             OnPropertyChanged(nameof(KmsClientList));
+            OnPropertyChanged(nameof(OfficeLicenses));
         }
     }
 
@@ -42,12 +46,21 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public IEnumerable<KmsClientInfo> KmsClientList =>
         Summary.KmsClient != null ? new[] { Summary.KmsClient } : Array.Empty<KmsClientInfo>();
 
+    /// <summary>Collection for Office licences.</summary>
+    public IEnumerable<OfficeLicenseInfo> OfficeLicenses => Summary.OfficeLicenses;
+
+    public ICommand RefreshCommand { get; }
+
+    public ICommand SaveJsonCommand { get; }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MainWindowViewModel"/> class.
     /// </summary>
     public MainWindowViewModel()
     {
         SystemInfo = BuildSystemInfo();
+        RefreshCommand = new RelayCommand(_ => Refresh());
+        SaveJsonCommand = new RelayCommand(_ => SaveJson());
         Refresh();
     }
 
@@ -60,6 +73,20 @@ public class MainWindowViewModel : INotifyPropertyChanged
         catch
         {
             Summary = new LicenseSummary();
+        }
+    }
+
+    private void SaveJson()
+    {
+        try
+        {
+            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            var path = Path.Combine(desktop, "LicenseSummary.json");
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(path, JsonSerializer.Serialize(Summary, options));
+        }
+        catch
+        {
         }
     }
 

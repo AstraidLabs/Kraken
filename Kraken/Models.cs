@@ -23,12 +23,14 @@ public class WindowsLicenseInfo
     public DateTime? TrustedTime { get; set; }
     public int RearmCount { get; set; }
     public bool IsDigitalLicense { get; set; }
+    public bool IsWindowsGenuineLocal { get; set; }
     public List<string> LicenseKeyFiles { get; set; } = new();
 }
 
 public class OfficeLicenseInfo
 {
     public string SLID { get; set; } = string.Empty;
+    public string SkuId { get; set; } = string.Empty;
     public string ProductName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
@@ -36,6 +38,10 @@ public class OfficeLicenseInfo
     public DateTime? Expiration { get; set; }
     public string PartialProductKey { get; set; } = string.Empty;
     public string Channel { get; set; } = string.Empty;
+    public string OfflineInstallationId { get; set; } = string.Empty;
+    public DateTime? TrustedTime { get; set; }
+    public int RearmCount { get; set; }
+    public List<string> LicenseKeyFiles { get; set; } = new();
 }
 
 public class KmsServerInfo
@@ -46,6 +52,8 @@ public class KmsServerInfo
     public string Name { get; set; } = string.Empty;
     public int Port { get; set; }
     public string IPAddress { get; set; } = string.Empty;
+    public string ServiceState { get; set; } = string.Empty;
+    public string ServiceStatus { get; set; } = string.Empty;
 }
 
 public class KmsClientInfo
@@ -57,6 +65,9 @@ public class KmsClientInfo
     public int DiscoveredPort { get; set; }
     public string DiscoveredIP { get; set; } = string.Empty;
     public int RenewalInterval { get; set; }
+    public string ActivationId { get; set; } = string.Empty;
+    public DateTime? LastActivationTime { get; set; }
+    public int RearmCount { get; set; }
 }
 
 public class SubscriptionInfo
@@ -64,6 +75,8 @@ public class SubscriptionInfo
     public bool Enabled { get; set; }
     public uint Sku { get; set; }
     public uint State { get; set; }
+    public DateTime? LicenseExpiration { get; set; }
+    public uint SubscriptionType { get; set; }
 }
 
 public class VNextInfo
@@ -71,6 +84,7 @@ public class VNextInfo
     public Dictionary<string, string> ModePerProductReleaseId { get; set; } = new();
     public bool SharedComputerLicensing { get; set; }
     public List<string> Licenses { get; set; } = new();
+    public List<string> LicenseKeyFiles { get; set; } = new();
 }
 
 public class AdActivationInfo
@@ -79,6 +93,7 @@ public class AdActivationInfo
     public string ObjectDN { get; set; } = string.Empty;
     public string CsvlkPid { get; set; } = string.Empty;
     public string CsvlkSkuId { get; set; } = string.Empty;
+    public string ActivationId { get; set; } = string.Empty;
 }
 
 public class VmActivationInfo
@@ -87,6 +102,8 @@ public class VmActivationInfo
     public string HostMachineName { get; set; } = string.Empty;
     public string HostDigitalPid2 { get; set; } = string.Empty;
     public DateTime? ActivationTime { get; set; }
+    public string HostMachineID { get; set; } = string.Empty;
+    public string HostMachineVersion { get; set; } = string.Empty;
 }
 
 public class LicenseSummary

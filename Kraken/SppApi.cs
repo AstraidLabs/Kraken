@@ -853,6 +853,10 @@ namespace Kraken
             public uint dwSku;
             /// <summary>Subscription state.</summary>
             public uint dwState;
+            /// <summary>License expiration time.</summary>
+            public uint dwLicenseExpiration;
+            /// <summary>Subscription type.</summary>
+            public uint dwSubscriptionType;
         }
 
         // Native import classes
